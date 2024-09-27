@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+
+	<head>
+		<title>Screen & Webcam Recording Example</title>
+	</head>
+
+	<body>
+
+		<button id="startRecording">Start Recording</button>
+		<button id="stopRecording" disabled>Stop Recording</button>
+
+		<video id="webcam" width="200" height="150" autoplay></video>
+
+		<script>
+			let mediaRecorder;
+			let recordedChunks = [];
+
+			document.getElementById('startRecording').addEventListener('click', async () => {
+				const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+
+				// Get webcam stream
+				const webcamStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+				const webcamElement = document.getElementById('webcam');
+				webcamElement.srcObject = webcamStream;
+
+				// Combine streams (not combining in this example, but you could do it)
+				// const combinedStream = new MediaStream([...screenStream.getTracks(), ...webcamStream.getTracks()]);
+
+				mediaRecorder = new MediaRecorder(screenStream);
+
+				mediaRecorder.ondataavailable = event => {
+					if (event.data.size > 0) {
+						recordedChunks.push(event.data);
+					}
+				};
+
+				mediaRecorder.onstop = () => {
+					const blob = new Blob(recordedChunks, { type: 'video/webm' });
+					const url = URL.createObjectURL(blob);
+					const a = document.createElement('a');
+					a.style.display = 'none';
+					a.href = url;
+					a.download = 'screen-recording.webm';
+					document.body.appendChild(a);
+					a.click();
+					setTimeout(() => {
+						document.body.removeChild(a);
+						URL.revokeObjectURL(url);
+					}, 100);
+				};
+
+				mediaRecorder.start();
+				document.getElementById('startRecording').disabled = true;
+				document.getElementById('stopRecording').disabled = false;
+			});
+
+			document.getElementById('stopRecording').addEventListener('click', () => {
+				mediaRecorder.stop();
+				document.getElementById('startRecording').disabled = false;
+				document.getElementById('stopRecording').disabled = true;
+			});
+		</script>
+
+	</body>
+
+</html>
