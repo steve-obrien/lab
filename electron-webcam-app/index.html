@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+
+	<head>
+		<meta charset="UTF-8">
+		<title>Webcam Viewer</title>
+		<style>
+			body {
+				margin: 0;
+				overflow: hidden;
+				background-color: black;
+			}
+
+			video {
+				width: 100%;
+				height: 100%;
+				object-fit: cover;
+			}
+
+			/* Draggable area */
+			#draggable {
+				-webkit-app-region: drag;
+				position: absolute;
+				width: 100%;
+				height: 30px;
+				top: 0;
+				left: 0;
+				background: rgba(0, 0, 0, 0.5);
+				cursor: move;
+			}
+
+			/* Camera selection */
+			#controls {
+				position: absolute;
+				top: 40px;
+				left: 10px;
+				z-index: 1;
+				color: white;
+			}
+
+			select,
+			button {
+				margin: 5px;
+				padding: 5px;
+			}
+
+			button {
+				cursor: pointer;
+			}
+		</style>
+	</head>
+
+	<body>
+		<div id="draggable"></div>
+		<div id="controls">
+			<select id="cameraSelect"></select>
+			<button onclick="resizeWindow('small')">Small</button>
+			<button onclick="resizeWindow('medium')">Medium</button>
+			<button onclick="resizeWindow('large')">Large</button>
+		</div>
+		<video autoplay></video>
+
+		<script>
+			const videoElement = document.querySelector('video');
+			const cameraSelect = document.getElementById('cameraSelect');
+
+			navigator.mediaDevices.enumerateDevices()
+				.then(gotDevices)
+				.then(getStream)
+				.catch(handleError);
+
+			cameraSelect.onchange = getStream;
+
+			function gotDevices(deviceInfos) {
+				cameraSelect.innerHTML = '';
+				for (let i = 0; i < deviceInfos.length; i++) {
+					const deviceInfo = deviceInfos[i];
+					if (deviceInfo.kind === 'videoinput') {
+						const option = document.createElement('option');
+						option.value = deviceInfo.deviceId;
+						option.text = deviceInfo.label || `Camera ${cameraSelect.length + 1}`;
+						cameraSelect.appendChild(option);
+					}
+				}
+			}
+
+			function getStream() {
+				if (window.stream) {
+					window.stream.getTracks().forEach(track => track.stop());
+				}
+				const videoSource = cameraSelect.value;
+				const constraints = {
+					video: { deviceId: videoSource ? { exact: videoSource } : undefined }
+				};
+				navigator.mediaDevices.getUserMedia(constraints)
+					.then(gotStream)
+					.catch(handleError);
+			}
+
+			function gotStream(stream) {
+				window.stream = stream;
+				videoElement.srcObject = stream;
+			}
+
+			function handleError(error) {
+				console.error('Error: ', error);
+			}
+
+			function resizeWindow(size) {
+				window.electronAPI.resizeWindow(size);
+			}
+		</script>
+	</body>
+
+</html>
