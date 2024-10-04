@@ -9,7 +9,10 @@
 				margin: 0;
 				overflow: hidden;
 				background-color: black;
+				-webkit-app-region: drag;
 			}
+
+			/* Add styles to make the window round */
 
 			video {
 				width: 100%;
@@ -17,25 +20,17 @@
 				object-fit: cover;
 			}
 
-			/* Draggable area */
-			#draggable {
-				-webkit-app-region: drag;
-				position: absolute;
-				width: 100%;
-				height: 30px;
-				top: 0;
-				left: 0;
-				background: rgba(0, 0, 0, 0.5);
-				cursor: move;
-			}
 
 			/* Camera selection */
 			#controls {
 				position: absolute;
-				top: 40px;
-				left: 10px;
-				z-index: 1;
+				bottom: 20px;
+				left: 20px;
+				width: 100%;
+				z-index: 20;
 				color: white;
+				-webkit-app-region: no-drag;
+				/* Make controls non-draggable */
 			}
 
 			select,
@@ -44,21 +39,35 @@
 				padding: 5px;
 			}
 
-			button {
+			button,
+			select {
 				cursor: pointer;
+				opacity: 0;
+			}
+
+			body:hover button,
+			body:hover select {
+				opacity: 1;
+			}
+
+			body.round .panel {
+				border-radius: 50%;
 			}
 		</style>
 	</head>
 
-	<body>
-		<div id="draggable"></div>
-		<div id="controls">
-			<select id="cameraSelect"></select>
-			<button onclick="resizeWindow('small')">Small</button>
-			<button onclick="resizeWindow('medium')">Medium</button>
-			<button onclick="resizeWindow('large')">Large</button>
-		</div>
-		<video autoplay></video>
+	<body style="background:transparent;">
+		<div class="panel" style="display: flex; background:transparent; overflow: hidden; flex-direction: column; align-items: center; justify-content: center; height: 100vh;">
+			<div id="controls">
+				<select id="cameraSelect"></select>
+				<button onclick="resizeWindow('small')">Small</button>
+				<button onclick="resizeWindow('medium')">Medium</button>
+				<button onclick="resizeWindow('large')">Large</button>
+				<button onclick="toggleShape('round')">Round</button>
+				<button onclick="toggleShape('square')">Square</button>
+			</div>
+			<video autoplay></video>
+	</div>
 
 		<script>
 			const videoElement = document.querySelector('video');
@@ -108,6 +117,15 @@
 
 			function resizeWindow(size) {
 				window.electronAPI.resizeWindow(size);
+			}
+
+			function toggleShape(shape) {
+				window.electronAPI.toggleShape(shape);
+				if (shape === 'round') {
+					document.body.classList.add('round');
+				} else {
+					document.body.classList.remove('round');
+				}
 			}
 		</script>
 	</body>

@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 
 function createWindow() {
 	const win = new BrowserWindow({
@@ -6,7 +6,7 @@ function createWindow() {
 		height: 480,
 		alwaysOnTop: true,
 		frame: false,
-		transparent: false,
+		transparent: true, // Make window transparent
 		resizable: true,
 		webPreferences: {
 			nodeIntegration: false,
@@ -33,9 +33,6 @@ app.on('activate', () => {
 	if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
 
-
-const { ipcMain } = require('electron');
-
 ipcMain.on('resize-window', (event, size) => {
 	const win = BrowserWindow.fromWebContents(event.sender);
 	let width, height;
@@ -52,4 +49,14 @@ ipcMain.on('resize-window', (event, size) => {
 	}
 
 	win.setSize(width, height);
+});
+
+ipcMain.on('toggle-shape', (event, shape) => {
+	const win = BrowserWindow.fromWebContents(event.sender);
+	if (shape === 'round') {
+		win.setSize(640, 640); // Make it a square for round shape
+		win.setResizable(true); // Disable resizing to maintain shape
+	} else {
+		win.setResizable(true); // Enable resizing for square
+	}
 });
