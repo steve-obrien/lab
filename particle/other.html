@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js Animated Dots</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+			position:relative;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Include the Three.js library from a CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        // Initialize the scene, camera, and renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 2000);
+        camera.position.z = 1000;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+		renderer.setClearColor(0x000000, 1);  // Setting the clear color to black
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Create a geometry of particles
+        const geometry = new THREE.BufferGeometry();
+        const vertices = [];
+        for (let i = 0; i < 10000; i++) {
+            let x = (Math.random() - 0.5) * 1500;
+            let y = (Math.random() - 0.5) * 1500;
+            let z = (Math.random() - 0.5) * 1500;
+            vertices.push(x, y, z);
+        }
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+
+        // Create material for particles using a circle texture
+        const loader = new THREE.TextureLoader();
+        const dotTexture = loader.load('https://threejs.org/examples/textures/sprites/disc.png');
+        const material = new THREE.PointsMaterial({ size: 5, map: dotTexture, transparent: true, alphaTest: 0.5 });
+
+        // Create the particles and add them to the scene
+        const particles = new THREE.Points(geometry, material);
+        scene.add(particles);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x555555);
+        scene.add(ambientLight);
+        const pointLight = new THREE.PointLight(0xffffff, 1, 1500);
+        pointLight.position.set(400, 400, 400);
+        scene.add(pointLight);
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Undulate the dots in waves
+            particles.geometry.attributes.position.array.forEach((vertex, index) => {
+                if (index % 3 === 1) { // y component
+                    particles.geometry.attributes.position.array[index] += Math.sin(particles.geometry.attributes.position.array[index - 1] + Date.now() * 0.0005) * 0.5;
+                }
+            });
+            particles.geometry.attributes.position.needsUpdate = true;
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', function () {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            renderer.setSize(width, height);
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+        });
+    </script>
+
+	<svg viewBox="0 0 74 50" xmlns="http://www.w3.org/2000/svg" style="color: #fff; position: absolute;top: 50%;left: 50%;transform: translate3d(-50%, -50%, 0);width: 300px;">
+		<g fill="currentColor" fill-rule="nonzero">
+			<path d="M28.0586 18.9097V13.6685H39.4514V9.25717H28.0586V4.51537H39.5009V0.00488281H28.0586H26.8314H22.8184V23.4201H26.8314H28.0586H39.7001V18.9097H28.0586Z" fill=""></path>
+			<path d="M68.2575 0.00500488L63.7746 14.6646L59.4009 0.00500488H55.2887L50.9444 14.6535L46.4669 0.00500488H41.2598L48.8213 23.4203H52.9004L57.331 8.68821L61.7892 23.4203H65.8692L73.4307 0.00500488H68.2575Z" fill=""></path>
+			<path d="M0 49.6028V26.1875H5.24021V49.6028H0Z" fill=""></path>
+			<path d="M19.1704 49.9682C17.4237 49.9682 15.8045 49.6634 14.312 49.0558C12.8196 48.4481 11.5143 47.5908 10.3982 46.4848C9.28203 45.3797 8.41371 44.0919 7.79413 42.6214C7.17548 41.1509 6.86523 39.5639 6.86523 37.8613C6.86523 36.1586 7.17548 34.5725 7.79413 33.102C8.41371 31.6316 9.28203 30.3539 10.3982 29.2708C11.5143 28.1886 12.8131 27.3423 14.2955 26.7337C15.7761 26.127 17.4016 25.8223 19.1704 25.8223C21.0282 25.8223 22.6804 26.1206 24.1288 26.7172C25.5763 27.3138 26.843 28.1326 27.927 29.1716L24.4106 32.7211C23.814 32.0575 23.0788 31.5379 22.2049 31.1625C21.3311 30.7871 20.3196 30.5989 19.1704 30.5989C18.1534 30.5989 17.2245 30.7697 16.3846 31.113C15.5438 31.4562 14.815 31.9473 14.1955 32.588C13.5768 33.2305 13.1013 34.0043 12.7691 34.9103C12.4377 35.8171 12.2725 36.8011 12.2725 37.8622C12.2725 38.9232 12.4377 39.9687 12.7691 40.8646C13.1013 41.7586 13.5768 42.5333 14.1955 43.1859C14.815 43.8376 15.5438 44.336 16.3846 44.6784C17.2245 45.0217 18.1534 45.1924 19.1704 45.1924C20.3646 45.1924 21.4045 45.0107 22.2885 44.6463C23.1724 44.2809 23.9241 43.7559 24.5437 43.0702L28.0923 46.6188C26.9871 47.6799 25.7039 48.5051 24.2454 49.0897C22.786 49.6754 21.0943 49.9682 19.1704 49.9682Z" fill=""></path>
+			<path d="M39.5351 50.0001C37.7654 50.0001 36.1297 49.6917 34.6263 49.0712C33.1228 48.4535 31.8074 47.5898 30.6793 46.4846C29.5522 45.3795 28.6784 44.0917 28.0588 42.6212C27.4401 41.1508 27.1299 39.5638 27.1299 37.8611C27.1299 36.1584 27.4401 34.5448 28.0588 33.0863C28.6784 31.6268 29.5402 30.3491 30.6463 29.2559C31.7505 28.1609 33.0558 27.31 34.5602 26.7014C36.0627 26.0938 37.6984 25.7891 39.4681 25.7891C41.2378 25.7891 42.834 26.0938 44.3274 26.7014C45.8199 27.31 47.1288 28.1609 48.2569 29.2559C49.384 30.35 50.2523 31.6323 50.86 33.1028C51.4685 34.5732 51.7724 36.1703 51.7724 37.8951C51.7724 39.6198 51.4621 41.1838 50.8435 42.6543C50.2248 44.1247 49.362 45.407 48.2569 46.5021C47.1517 47.5971 45.8575 48.4544 44.3769 49.0712C42.8946 49.6908 41.2809 50.0001 39.5351 50.0001ZM39.4681 45.2253C40.8605 45.2253 42.0767 44.915 43.1158 44.2964C44.1557 43.6777 44.9671 42.8149 45.5537 41.7089C46.1402 40.6047 46.4321 39.3214 46.4321 37.862C46.4321 36.7789 46.2669 35.7894 45.9355 34.8945C45.6032 33.9986 45.1278 33.2258 44.5091 32.5732C43.8895 31.9215 43.1488 31.4221 42.286 31.0798C41.4241 30.7374 40.4842 30.5648 39.4672 30.5648C38.0747 30.5648 36.8521 30.8696 35.803 31.4781C34.7529 32.0858 33.9397 32.9366 33.3651 34.0317C32.7896 35.1258 32.5023 36.4035 32.5023 37.862C32.5023 38.969 32.6684 39.9741 32.9998 40.88C33.3311 41.7869 33.8066 42.5662 34.4262 43.2188C35.0448 43.8705 35.78 44.3698 36.6318 44.7122C37.4827 45.0546 38.4272 45.2262 39.4672 45.2262L39.4681 45.2253Z" fill=""></path>
+			<path d="M58.6717 49.6026V35.4103L69.7497 49.6026H73.4313V45.932L58.0126 26.1874H53.3984V49.6026H58.6717Z" fill=""></path>
+			<path d="M68.1914 31.4285H73.4316V26.1883H68.1914V31.4285Z" fill=""></path>
+			<path d="M14.7596 0L14.7596 14.1924L3.68164 0L0 0L-2.96541e-08 3.67063L15.4186 23.4153H20.0329L20.0329 0L14.7596 0Z" fill=""></path>
+			<path d="M5.24021 18.1748L0 18.1748L-4.23344e-08 23.415L5.24021 23.415L5.24021 18.1748Z" fill=""></path>
+		</g>
+	</svg>
+	<!-- <img src="./newicon.png" style="position: absolute;top: 50%;left: 50%;transform: translate3d(-50%, -50%, 0);width: 300px;" /> -->
+</body>
+</html>

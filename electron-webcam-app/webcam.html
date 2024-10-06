@@ -65,6 +65,7 @@
 				<button onclick="resizeWindow('large')">Large</button>
 				<button onclick="toggleShape('round')">Round</button>
 				<button onclick="toggleShape('square')">Square</button>
+				<button onclick="closeWindow()">Close</button>
 			</div>
 			<video autoplay></video>
 	</div>
@@ -126,6 +127,10 @@
 				} else {
 					document.body.classList.remove('round');
 				}
+			}
+
+			function closeWindow() {
+				window.electronAPI.closeWindow();
 			}
 		</script>
 	</body>

@@ -1,0 +1,30 @@
+{
+	"name": "electron-screen-recorder",
+	"version": "1.0.0",
+	"main": "src/main/index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"dev": "vite",
+		"build": "vite build",
+		"electron": "electron .",
+		"start": "concurrently \"npm:dev\" \"npm:electron\"",
+		"package": "npm run build && electron-builder"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"description": "",
+	"devDependencies": {
+		"@vitejs/plugin-vue": "^5.1.4",
+		"concurrently": "^7.6.0",
+		"electron": "^32.1.2",
+		"electron-builder": "^24.13.3",
+		"vite": "^5.4",
+		"vite-electron-builder": "^0.0.0",
+		"vue": "^3.5"
+	},
+	"dependencies": {
+		"vite": "^5.4.8",
+		"vue": "^3.5.10"
+	}
+}
