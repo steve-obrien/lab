@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+
+	<head>
+		<meta charset="UTF-8">
+		<title>Screen Recorder</title>
+		<style>
+			body {
+				font-family: Arial, sans-serif;
+				padding: 20px;
+			}
+
+			#startButton {
+				margin-top: 10px;
+			}
+		</style>
+	</head>
+
+	<body>
+		<h2>Screen Recorder</h2>
+		<label for="microphoneSelect">Select Microphone:</label><br>
+		<select id="microphoneSelect" style="width: 100%;"></select><br><br>
+
+		<label for="sourceSelect">Select Screen/Window:</label><br>
+		<select id="sourceSelect" style="width: 100%;"></select><br>
+		<button id="startButton">Start Recording</button>
+
+		<script src="recorder.js"></script>
+	</body>
+
+</html>
