@@ -1,0 +1,25 @@
+{
+	"name": "speech-assistant-openai-realtime-api-node",
+	"version": "1.0.0",
+	"description": "",
+	"main": "index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"type": "module",
+	"dependencies": {
+		"@fastify/formbody": "^8.0.0",
+		"@fastify/static": "^8.0.1",
+		"@fastify/websocket": "^11.0.0",
+		"@openai/realtime-api-beta": "github:openai/openai-realtime-api-beta",
+		"dotenv": "^16.4.5",
+		"fastify": "^5.0.0",
+		"node-fetch": "^3.3.2",
+		"plivo": "^4.69.1",
+		"twilio": "^5.3.3",
+		"ws": "^8.18.0"
+	}
+}

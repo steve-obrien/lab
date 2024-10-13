@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>AI Call Interface</title>
+		<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+		<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+	</head>
+
+	<body class="bg-gray-100 text-gray-900">
+		<div class="flex" id="app">
+			<div class="w-full p-4">
+				<call-logs></call-logs>
+			</div>
+			<div class="w-[300px] p-4">
+
+				<h1 class="text-3xl font-bold mb-4">AI Call Interface</h1>
+				<p class="mb-4">Enter a phone number to make a call:</p>
+				<form @submit.prevent="makeCall" id="callForm" class="bg-white p-6 rounded shadow-md">
+					<select v-model="selectedFile" @change="loadInstructions" id="instructionFiles" class="w-full p-2 border border-gray-300 rounded mb-4">
+						<option value="new">New...</option>
+						<option v-for="file in instructionFiles" :key="file" :value="file">{{ file.name }}</option>
+					</select>
+					<textarea v-model="instructions" id="instructions" rows="5" placeholder="AI instructions" class="w-full p-2 border border-gray-300 rounded mb-4"></textarea><br>
+					<input v-model="phoneNumber" type="text" id="phoneNumber" placeholder="Enter phone number" required class="w-full p-2 border border-gray-300 rounded mb-4">
+					<button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Make Call</button>
+					<button type="button" @click="saveInstructions" id="saveButton" class="bg-green-500 text-white px-4 py-2 rounded ml-2">Save</button>
+				</form>
+			</div>
+		</div>
+
+		<script>
+
+			const { createApp, ref, onMounted } = Vue;
+
+			const CallLogs = {
+				template: `
+					<div class="bg-white p-6 rounded shadow-md mt-8">
+						<h2 class="text-2xl font-bold mb-4">Call Logs</h2>
+						<div class="h-64 overflow-y-auto border border-gray-300 p-4">
+							<div v-for="(item, index) in items" :key="index" class="mb-2">
+							<!--  {{ item }} -->
+							</div>
+
+
+							<div class="content-block conversation">
+								<div class="content-block-title">conversation</div>
+								<div class="content-block-body" data-conversation-content>
+									<div v-if="!items.length">awaiting connection...</div>
+									<div v-for="(conversationItem, i) in items" :key="conversationItem.id" class="flex gap-4 group border-b border-gray-200">
+										<div class="flex w-20 font-mono" :class="conversationItem.role == 'assistant' ? 'text-green-700' : 'text-blue-700'">
+											<div>
+												{{ (conversationItem.role || conversationItem.type).replaceAll('_', ' ') }}
+											</div>
+											<div class="close invisible group-hover:visible" @click="deleteConversationItem(conversationItem.id)">
+												X
+											</div>
+										</div>
+										<div class="speaker-content font-mono w-full">
+											<!-- tool response -->
+											<div v-if="conversationItem.type === 'function_call_output'">
+												{{ conversationItem.formatted.output }}
+											</div>
+											<!-- tool call -->
+											<div v-if="conversationItem.formatted.tool">
+												{{ conversationItem.formatted.tool.name }}({{ conversationItem.formatted.tool.arguments }})
+											</div>
+											<div v-if="!conversationItem.formatted.tool && conversationItem.role === 'user'">
+												{{ conversationItem.formatted.transcript || (conversationItem.formatted.audio?.length ? '(awaiting transcript)' : conversationItem.formatted.text || '(item sent)') }}
+											</div>
+											<div v-if="!conversationItem.formatted.tool && conversationItem.role === 'assistant'">
+												{{ conversationItem.formatted.transcript || conversationItem.formatted.text || '(truncated)' }}
+											</div>
+											<div v-if="conversationItem.formatted.file">
+												<audio :src="conversationItem.formatted.file.url" controls />
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				`,
+				data() {
+					return {
+						items: []
+					};
+				},
+				methods: {
+					connectWebSocket() {
+						
+						const host = window.location.host;
+						const socket = new WebSocket(`ws://${host}/log-stream`);
+
+						socket.onmessage = (event) => {
+							const item = JSON.parse(event.data);
+							const index = this.items.findIndex(existingItem => existingItem.id === item.id);
+							if (index !== -1) {
+								this.items.splice(index, 1, item);
+							} else {
+								this.items.push(item);
+							}
+						};
+
+						socket.onerror = (error) => {
+							console.error('WebSocket Error: ', error);
+						};
+
+						socket.onopen = () => {
+							console.log('WebSocket connection opened');
+
+							socket.send('ping');
+						};
+
+						socket.onclose = () => {
+							console.log('WebSocket connection closed. Reconnecting in 5 seconds...');
+							setTimeout(this.connectWebSocket, 5000);
+						};
+
+					
+					},
+					deleteConversationItem(id) {
+						console.log('deleteConversationItem', id);
+					}
+				},
+				mounted() {
+					this.connectWebSocket();
+				}
+			};
+
+			const App = {
+				components: {
+					CallLogs
+				},
+				data() {
+					return {
+						instructionFiles: [],
+						selectedFile: 'new',
+						instructions: '',
+						phoneNumber: '07969088447'
+					};
+				},
+				methods: {
+					async fetchInstructionFiles() {
+						const response = await fetch('/instructions');
+						this.instructionFiles = await response.json();
+					},
+					async loadInstructions() {
+						if (this.selectedFile === 'new') {
+							this.instructions = '';
+						} else {
+							const response = await fetch("/instructions/" + this.selectedFile.name);
+							const data = await response.json();
+							this.instructions = data.instructions;
+						}
+					},
+					async saveInstructions() {
+						let fileName = this.selectedFile;
+
+						if (this.selectedFile === 'new') {
+							fileName = prompt('Enter a file name for the new instructions:');
+							if (!fileName) return; // Exit if no file name is provided
+						}
+
+						try {
+							const response = await fetch("/save-instructions", {
+								method: 'POST',
+								headers: { 'Content-Type': 'application/json' },
+								body: JSON.stringify({ fileName, instructions: this.instructions })
+							});
+							const result = await response.json();
+							//alert(result.message || 'Instructions saved');
+						} catch (error) {
+							alert('Failed to save instructions');
+						}
+					},
+					async makeCall() {
+						try {
+							const response = await fetch('/make-call', {
+								method: 'POST',
+								headers: { 'Content-Type': 'application/json' },
+								body: JSON.stringify({ to: this.phoneNumber, instructions: this.instructions })
+							});
+
+							const result = await response.json();
+							//alert(result.message || 'Call initiated');
+						} catch (error) {
+							alert('Failed to initiate call');
+						}
+					}
+				},
+				mounted() {
+					this.fetchInstructionFiles();
+				}
+			}
+			createApp(App).mount('#app');
+
+		</script>
+	</body>
+
+</html>
