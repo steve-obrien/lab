@@ -11,7 +11,7 @@
 
 	<body class="bg-gray-100 text-gray-900">
 		<div class="flex" id="app">
-			<div class="w-full p-4">
+			<div class="w-full overflow-x-scroll p-4">
 				<call-logs></call-logs>
 			</div>
 			<div class="w-[300px] p-4">
@@ -47,7 +47,7 @@
 
 							<div class="content-block conversation">
 								<div class="content-block-title">conversation</div>
-								<div class="content-block-body" data-conversation-content>
+								<div class="content-block-body">
 									<div v-if="!items.length">awaiting connection...</div>
 									<div v-for="(conversationItem, i) in items" :key="conversationItem.id" class="flex gap-4 group border-b border-gray-200">
 										<div class="flex w-20 font-mono" :class="conversationItem.role == 'assistant' ? 'text-green-700' : 'text-blue-700'">
@@ -139,7 +139,7 @@
 						instructionFiles: [],
 						selectedFile: 'new',
 						instructions: '',
-						phoneNumber: '07969088447'
+						phoneNumber: '447969088447'
 					};
 				},
 				methods: {

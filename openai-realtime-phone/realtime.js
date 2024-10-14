@@ -53,6 +53,7 @@ registerInstructionsRoutes(fastify);
 const VOICE = 'shimmer';
 const PORT = process.env.PORT || 5050; // Allow dynamic port assignment
 
+
 // List of Event Types to log to the console. See OpenAI Realtime API Documentation. (session.updated is handled separately.)
 const LOG_EVENT_TYPES = [
 	'response.content.done',
@@ -64,7 +65,8 @@ const LOG_EVENT_TYPES = [
 	'session.created'
 ];
 
-const host = 'da4a-109-157-217-62.ngrok-free.app';
+///89ff-2a00-23c7-8a8a-f401-9c5f-3bc4-77b8-abd8
+const host = process.env.HOST
 
 let logWs = null;
 
@@ -100,60 +102,6 @@ fastify.all('/outbound-call', async (request, reply) => {
 
 	reply.type('text/xml').send(twimlResponse);
 });
-
-
-// Function to resample the PCM16 data
-// Resampling PCM16 array to target sample rate using linear interpolation
-function resamplePCM(pcm16Array, originalSampleRate, targetSampleRate) {
-	const resampleRatio = targetSampleRate / originalSampleRate;
-	const targetLength = Math.ceil(pcm16Array.length * resampleRatio);
-	const resampledArray = new Int16Array(targetLength);
-
-	for (let i = 0; i < targetLength; i++) {
-		// Find corresponding index in the original array
-		const originalIndex = i / resampleRatio;
-		const indexLow = Math.floor(originalIndex);
-		const indexHigh = Math.ceil(originalIndex);
-
-		// Interpolate between the two nearest samples
-		const sampleLow = pcm16Array[indexLow] || 0;
-		const sampleHigh = pcm16Array[indexHigh] || 0;
-		const weightHigh = originalIndex - indexLow;
-		const weightLow = 1 - weightHigh;
-
-		// Calculate the interpolated sample
-		resampledArray[i] = Math.round(sampleLow * weightLow + sampleHigh * weightHigh);
-	}
-
-	return resampledArray;
-}
-
-
-// Function to convert PCM16 to PCM8
-function convert16BitPCMto8Bit(pcm16Array) {
-	const pcm8Array = new Uint8Array(pcm16Array.length); // 8-bit array
-	for (let i = 0; i < pcm16Array.length; i++) {
-		// Scale 16-bit PCM (-32768 to 32767) to 8-bit PCM (0 to 255)
-		const sample = pcm16Array[i];
-		pcm8Array[i] = ((sample + 32768) >> 8); // Convert to range [0, 255]
-	}
-	return pcm8Array;
-}
-
-// Example usage
-// const pcm16Array = new Int16Array([/* your PCM16 data here */]);
-// const originalSampleRate = 24000; // Original sample rate
-// const targetSampleRate = 8000; // Target sample rate
-
-// // Step 1: Resample the 16-bit PCM array to 8kHz
-// resamplePCM(pcm16Array, originalSampleRate, targetSampleRate).then(resampledPCM16Array => {
-// 	console.log('Resampled PCM16 Data:', resampledPCM16Array);
-
-// 	// Step 2: Convert the resampled 16-bit PCM array to 8-bit
-// 	const pcm8Array = convert16BitPCMto8Bit(resampledPCM16Array);
-// 	console.log('Converted PCM8 Data:', pcm8Array);
-// });
-
 
 // WebSocket route for media-stream
 fastify.register(async (fastify) => {
@@ -197,6 +145,21 @@ fastify.register(async (fastify) => {
 			addTools(client)
 		}, 250);
 
+
+		client.realtime.on('server.response.audio.delta', (response) => {
+			// console.log('Sending audio delta to Twilio:', response);
+			// this keeps sending even when cancelled?
+			const audioDelta = {
+				event: 'media',
+				streamSid: streamSid,
+				media: { payload: Buffer.from(response.delta, 'base64').toString('base64') }
+			};
+
+			// console.log('Sending audio delta to Twilio:', audioDelta);
+			twilioWs.send(JSON.stringify(audioDelta));
+
+		});
+
 		client.on('conversation.updated', async ({ item, delta }) => {
 			// Send log to logWs
 			if (logWs && logWs.readyState === WebSocket.OPEN) {
@@ -208,8 +171,8 @@ fastify.register(async (fastify) => {
 			if (delta?.audio) {
 
 				// const resampledAudio = resamplePCM(delta.audio, 24000);
-
 				const base64Audio = Buffer.from(delta.audio).toString('base64');
+				// const base64Audio = convertPcm16ToMulawBase64(Buffer.from(delta.audio));
 				const audioDelta = {
 					event: 'media',
 					streamSid: streamSid,
@@ -218,13 +181,10 @@ fastify.register(async (fastify) => {
 						payload: base64Audio
 					}
 				};
-				console.log('Sending audio delta to Twilio', {
-					event: 'media',
-					streamSid: streamSid,
-					media: { payload: 'truncated' }
-				});
 
-				twilioWs.send(JSON.stringify(audioDelta));
+				console.log('Sending audio delta to Twilio', { event: 'media', streamSid: streamSid, media: { payload: 'truncated' } });
+
+				// twilioWs.send(JSON.stringify(audioDelta));
 			}
 
 		});
@@ -235,6 +195,7 @@ fastify.register(async (fastify) => {
 				const data = JSON.parse(message);
 				switch (data.event) {
 					case 'media':
+						// aparently I should be using this:  client.appendInputAudio(data);
 						if (client.realtime.isConnected()) {
 							client.realtime.send('input_audio_buffer.append', {
 								audio: data.media.payload,
@@ -358,6 +319,7 @@ function addTools(client) {
 			return json;
 		}
 	);
+
 }
 
 fastify.listen({ port: PORT }, (err) => {

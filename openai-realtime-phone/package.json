@@ -17,6 +17,7 @@
 		"@openai/realtime-api-beta": "github:openai/openai-realtime-api-beta",
 		"dotenv": "^16.4.5",
 		"fastify": "^5.0.0",
+		"fluent-ffmpeg": "^2.1.3",
 		"node-fetch": "^3.3.2",
 		"plivo": "^4.69.1",
 		"twilio": "^5.3.3",

@@ -63,7 +63,7 @@ const LOG_EVENT_TYPES = [
 	'session.created'
 ];
 
-const host = 'da4a-109-157-217-62.ngrok-free.app';
+const host = process.env.HOST
 
 let logWs = null;
 
@@ -90,10 +90,11 @@ fastify.post('/make-call', async (request, reply) => {
 
 // TwiML for outbound call
 fastify.all('/outbound-call', async (request, reply) => {
+	
 	const response = `<?xml version="1.0" encoding="UTF-8"?>
 				<Response>
 					<Play>https://s3.amazonaws.com/plivocloud/Trumpet.mp3</Play>
-					<Stream bidirectional="true" keepCallAlive="true" >wss://${request.headers.host}/media-stream</Stream>
+					<Stream bidirectional="true" keepCallAlive="true">wss://${request.headers.host}/media-stream</Stream>
 				</Response>`;
 
 	reply.type('text/xml').send(response);
@@ -171,6 +172,8 @@ fastify.register(async (fastify) => {
 					prefix_padding_ms: 300,
 					silence_duration_ms: 1000
 				},
+				input_audio_format: 'g711_ulaw',
+				output_audio_format: 'g711_ulaw',
 				voice: VOICE,
 				instructions: instructions,
 				modalities: ["text", "audio"],
@@ -178,6 +181,24 @@ fastify.register(async (fastify) => {
 				input_audio_transcription: { model: 'whisper-1' }
 			});
 		}, 250);
+
+		client.realtime.on('server.response.audio.delta', (response) => {
+			// console.log('Sending audio delta to Twilio:', response);
+			// this keeps sending even when cancelled?
+			const audioDelta = {
+				event: 'playAudio',
+				media: {
+					contentType: "audio/x-mulaw",
+					sampleRate: "8000",
+					// a base64 encoded string of 8000/mulaw
+					payload: Buffer.from(response.delta, 'base64').toString('base64')
+				}
+			};
+
+			// console.log('Sending audio delta to Twilio:', audioDelta);
+			plivoWs.send(JSON.stringify(audioDelta));
+
+		});
 
 		client.on('conversation.updated', async ({ item, delta }) => {
 			// Send log to logWs
@@ -193,17 +214,17 @@ fastify.register(async (fastify) => {
 				const audioDelta = {
 					event: 'playAudio',
 					media: {
-						contentType: "audio/x-l16",
+						contentType: "audio/x-mulaw: 8000",
 						// a base64 encoded string of 8000/mulaw
 						payload: base64Audio
 					}
 				};
 				console.log('Sending audio delta to Plivo', { event: 'playAudio', media: { payload: 'truncated' }});
-				plivoWs.send(JSON.stringify(audioDelta));
+				//plivoWs.send(JSON.stringify(audioDelta));
 			}
 		});
 
-		// Handle incoming messages from Twilio
+		// Handle incoming messages from Plivo
 		plivoWs.on('message', (message) => {
 			try {
 				const data = JSON.parse(message);
@@ -211,13 +232,56 @@ fastify.register(async (fastify) => {
 					case 'media':
 						// console.log('Received media event', data);
 						if (client.realtime.isConnected()) {
+							// console.log(data.media.payload, 'data.media.payload')
+
+							function linearToMuLawSample(sample) {
+								const MU_LAW_MAX = 0x1FFF;
+								const MU_LAW_BIAS = 33;
+
+								// Determine the sign and get the magnitude
+								let sign = (sample >> 8) & 0x80;
+								if (sign !== 0) {
+									sample = -sample;
+								}
+								if (sample > MU_LAW_MAX) {
+									sample = MU_LAW_MAX;
+								}
+								// Apply μ-law compression
+								sample = sample + MU_LAW_BIAS;
+								let exponent = Math.floor(Math.log(sample) / Math.log(2));
+								let mantissa = (sample >> (exponent - 3)) & 0x0F;
+								let muLawByte = ~(sign | (exponent << 4) | mantissa);
+							
+								return muLawByte & 0xFF;
+							}
+
+							function base64L16ToMuLaw(base64Str) {
+								const pcmBuffer = Buffer.from(base64Str, 'base64');
+								const muLawBuffer = Buffer.alloc(pcmBuffer.length / 2);
+								for (let i = 0; i < pcmBuffer.length; i += 2) {
+									// Read 16-bit sample (big-endian)
+									const sample = pcmBuffer.readInt16BE(i);
+									// Convert to μ-law
+									const muLawSample = linearToMuLawSample(sample);
+									// Store the μ-law sample
+									muLawBuffer[i / 2] = muLawSample;
+								}
+								return muLawBuffer;
+							}
+							
+							const base64Input = data.media.payload;
+							const muLawBuffer = base64L16ToMuLaw(base64Input);
+							// If you need the output as a base64 string
+							const base64MuLawOutput = muLawBuffer.toString('base64');
+
 							client.realtime.send('input_audio_buffer.append', {
-								audio: data.media.payload,
+								audio: base64MuLawOutput,
 							});
 						}
 						break;
 					case 'start':
 						console.log('Incoming stream has started', data);
+						client.sendUserMessageContent([{ type: 'input_text', text: `How are you?` }]);
 						break;
 					default:
 						console.log('Received non-media event:', data.event);
@@ -288,7 +352,7 @@ fastify.all('/incoming-call', async (request, reply) => {
 	const twimlResponse = `<?xml version="1.0" encoding="UTF-8"?>
 			<Response>
 			<Play>https://s3.amazonaws.com/plivocloud/Trumpet.mp3</Play>
-			<Stream bidirectional="true" keepCallAlive="true" >wss://${request.headers.host}/media-stream</Stream>
+			<Stream bidirectional="true" keepCallAlive="true" audioTrack="both" contentType="audio/x-mulaw;rate=8000" >wss://${request.headers.host}/media-stream</Stream>
 			</Response>`;
 
 	reply.type('text/xml').send(twimlResponse);
