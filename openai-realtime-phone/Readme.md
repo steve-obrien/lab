@@ -1,10 +1,17 @@
 # Running
 
+1. locally run ngrok - ngrok http 5050
+2. Place the ngrok url xxxxxxxx.ngrok-free.app into the .env HOST variable
+3. run the server - node realtime.js
+4. goto: http://localhost:5050
+
 There are 3 individual scripts.
 
 index.js 
 plivo.js
 realtime.js - realtime uses the open ai realtime client library and does work to merge messages into conversation items with their text transcribed.  This is then logged to a log web socket that the web page listens to.
+
+
 
 http://localhost:5050 - to make called.
 
@@ -73,6 +80,10 @@ client.on('conversation.interrupted', async () => {
 
 The wavStreamPlayer is able to return the offset so that cancel response - can later send a truncation messages to ChatGPT.
 This is kinda narly and feels like it could be handled directly in the realtime client library - but it is only a beta.
+
+To work around this - we need to manage our own buffer.
+For now - we send the whole audio - then send the openAI truncate message.
+This works and the model is interuptable - but we need to make sure it does not ALWAYS send interrupt.
 
 
 

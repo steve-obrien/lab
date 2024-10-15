@@ -36,6 +36,7 @@ fastify.register(fastifyFormBody);
 fastify.register(fastifyWs);
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { ClientRequest } from 'http';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -116,7 +117,7 @@ fastify.register(async (fastify) => {
 		});
 
 		// Change the defaultFrequency to 8,000 Hz
-		//client.conversation.defaultFrequency = 8_000;
+		client.realtime.defaultFrequency = 8_000;
 
 		// This timeout is important - the twilio connection must be established before the first message is sent
 		// Otherwise we do not get the streamSid back from twilio.
@@ -145,48 +146,61 @@ fastify.register(async (fastify) => {
 			addTools(client)
 		}, 250);
 
+		let itemTimeTracker = { }
+		let currentItem = { id: null };
 
+		let timer = null
+		// this is triggered when the AI starts speaking
+		client.realtime.on('server.conversation.item.created', (event) => {
+			let item = client.conversation.getItem(event.item.id);
+			item.startTime = Date.now();
+			// currentItem = event.item
+			console.log('!!!!!SERVER  conversation.item.created', event);
+			item.startTime = Date.now();
+		})
+
+		// play the audio
 		client.realtime.on('server.response.audio.delta', (response) => {
-			// console.log('Sending audio delta to Twilio:', response);
-			// this keeps sending even when cancelled?
+			// Track the time when we start sending audio
+			console.log('server.response.audio.delta', response.item);
+
 			const audioDelta = {
 				event: 'media',
 				streamSid: streamSid,
-				media: { payload: Buffer.from(response.delta, 'base64').toString('base64') }
+				media: { payload: response.delta }
 			};
-
-			// console.log('Sending audio delta to Twilio:', audioDelta);
 			twilioWs.send(JSON.stringify(audioDelta));
-
 		});
 
 		client.on('conversation.updated', async ({ item, delta }) => {
 			// Send log to logWs
+			if (delta?.audio) {
+				currentItem = item;
+			}
 			if (logWs && logWs.readyState === WebSocket.OPEN) {
 				logWs.send(JSON.stringify(item));
 			} else {
 				console.error('logWs is not open or not defined');
 			}
+		});
 
-			if (delta?.audio) {
-
-				// const resampledAudio = resamplePCM(delta.audio, 24000);
-				const base64Audio = Buffer.from(delta.audio).toString('base64');
-				// const base64Audio = convertPcm16ToMulawBase64(Buffer.from(delta.audio));
-				const audioDelta = {
-					event: 'media',
-					streamSid: streamSid,
-					media: {
-						// a base64 encoded string of 8000/mulaw
-						payload: base64Audio
-					}
-				};
-
-				console.log('Sending audio delta to Twilio', { event: 'media', streamSid: streamSid, media: { payload: 'truncated' } });
-
-				// twilioWs.send(JSON.stringify(audioDelta));
+		// in VAD mode, the user starts speaking
+		// we can use this to stop audio playback of a previous response if necessary
+		client.on('conversation.interrupted', async () => {
+			console.log('>> Conversation interrupted', currentItem.id);
+			const samples = 0;
+			let item = client.conversation.getItem(currentItem.id);
+			if (item) {
+				item.elapsedTime = Date.now() - item.startTime;
+				console.log('Elapsed time:', item.elapsedTime);
+				samples = item.elapsedTime * 8
+				// truncate to whisper api to get the audio.
+				
 			}
-
+			// 8000 Hz 8 samples per millisecond
+			console.log('samples:', samples, 'time:', samples / 8);
+			await client.cancelResponse(item?.id, samples);
+			twilioWs.send(JSON.stringify({ event: 'clear', streamSid: streamSid }));
 		});
 
 		// Handle incoming messages from Twilio
@@ -195,6 +209,14 @@ fastify.register(async (fastify) => {
 				const data = JSON.parse(message);
 				switch (data.event) {
 					case 'media':
+						// data:
+						// { 
+						//   event: 'media',
+						//   sequenceNumber: '830',
+						//   media: { track: 'inbound', chunk: '829', timestamp: '16653', payload: '...' },
+						//   streamSid: 'MZc3c3f2dda2bb10bf3fa1587f52d40548'
+						// }
+
 						// aparently I should be using this:  client.appendInputAudio(data);
 						if (client.realtime.isConnected()) {
 							client.realtime.send('input_audio_buffer.append', {
@@ -226,13 +248,6 @@ fastify.register(async (fastify) => {
 			console.error('Error:', event);
 		});
 
-		// in VAD mode, the user starts speaking
-		// we can use this to stop audio playback of a previous response if necessary
-		client.on('conversation.interrupted', (event) => {
-			console.log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!Conversation interrupted', event);
-			/* do something */
-		});
-
 
 	});
 });
@@ -242,7 +257,13 @@ fastify.register(async (fastify) => {
 	fastify.get('/log-stream', { websocket: true }, async (ws, req) => {
 		logWs = ws;
 		logWs.on('message', (message) => {
-			console.log('Log message:', message);
+			console.log('LogWs: message:', message);
+		});
+		logWs.on('error', (event) => {
+			console.error('LogWs: Error:', event);
+		});
+		logWs.on('close', (event) => {
+			console.error('LogWs: close', event);
 		});
 	});
 });
@@ -317,6 +338,112 @@ function addTools(client) {
 			};
 			// setMarker({ lat, lng, location, temperature, wind_speed });
 			return json;
+		}
+	);
+
+	client.addTool(
+		{
+			name: 'sort_code_lookup',
+			description:
+				'Looks up a bank account sort code to check it is valid and return information on the specific bank allowing the user to confirm',
+			parameters: {
+				type: 'object',
+				properties: {
+					sort_code: {
+						type: 'string',
+						description: 'The sort code for example: 40-14-21',
+					},
+				},
+				required: ['sort_code'],
+			},
+		},
+		async ({ sort_code }) => {
+
+			return {
+				"result": "VALID",
+				"bank": "HSBC, Downend branch"
+			}
+			
+		}
+	);
+
+	client.addTool(
+		{
+			name: 'account_number_lookup',
+			description:
+				'Looks up a bank account number to check it is valid',
+			parameters: {
+				type: 'object',
+				properties: {
+					sort_code: {
+						type: 'string',
+						description: 'The sort code for example: 40-14-21',
+					},
+					account_number: {
+						type: 'number',
+						description: 'The account number',
+					},
+				},
+				required: ['sort_code', 'account_number'],
+			},
+		},
+		async ({ sort_code, account_number }) => {
+
+			return {
+				"result": "VALID",
+				"bank": "HSBC"
+			}
+			
+		}
+	);
+
+	client.addTool(
+		{
+			name: 'donation',
+			description:
+				'Registers a direct debit subscription payment',
+			parameters: {
+				type: 'object',
+				properties: {
+					sort_code: {
+						type: 'string',
+						description: 'The sort code for example: 40-14-21',
+					},
+					account_number: {
+						type: 'number',
+						description: 'The account number',
+					},
+					amount: {
+						type: 'number',
+						description: 'The donation amount in pounds sterling',
+					},
+				},
+				required: ['sort_code', 'account_number', 'amount'],
+			},
+		},
+		async ({ sort_code, account_number, amount }) => {
+
+			return {
+				"result": "success"
+			}
+			
+		}
+	);
+
+	client.addTool(
+		{
+			name: 'hangup',
+			description:
+				'Ends the call',
+			parameters: {},
+		},
+		async ({ sort_code, account_number, amount }) => {
+
+			client.disconnect();
+			return {
+				"result": "success"
+			}
+			
 		}
 	);
 

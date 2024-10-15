@@ -93,51 +93,12 @@ fastify.all('/outbound-call', async (request, reply) => {
 	
 	const response = `<?xml version="1.0" encoding="UTF-8"?>
 				<Response>
-					<Play>https://s3.amazonaws.com/plivocloud/Trumpet.mp3</Play>
-					<Stream bidirectional="true" keepCallAlive="true">wss://${request.headers.host}/media-stream</Stream>
+					<Stream contentType="audio/x-mulaw;rate=8000" bidirectional="true" keepCallAlive="true">wss://${request.headers.host}/media-stream</Stream>
 				</Response>`;
 
 	reply.type('text/xml').send(response);
 });
 
-
-// Function to resample the PCM16 data
-// Resampling PCM16 array to target sample rate using linear interpolation
-function resamplePCM(pcm16Array, originalSampleRate, targetSampleRate) {
-	const resampleRatio = targetSampleRate / originalSampleRate;
-	const targetLength = Math.ceil(pcm16Array.length * resampleRatio);
-	const resampledArray = new Int16Array(targetLength);
-
-	for (let i = 0; i < targetLength; i++) {
-		// Find corresponding index in the original array
-		const originalIndex = i / resampleRatio;
-		const indexLow = Math.floor(originalIndex);
-		const indexHigh = Math.ceil(originalIndex);
-
-		// Interpolate between the two nearest samples
-		const sampleLow = pcm16Array[indexLow] || 0;
-		const sampleHigh = pcm16Array[indexHigh] || 0;
-		const weightHigh = originalIndex - indexLow;
-		const weightLow = 1 - weightHigh;
-
-		// Calculate the interpolated sample
-		resampledArray[i] = Math.round(sampleLow * weightLow + sampleHigh * weightHigh);
-	}
-
-	return resampledArray;
-}
-
-
-// Function to convert PCM16 to PCM8
-function convert16BitPCMto8Bit(pcm16Array) {
-	const pcm8Array = new Uint8Array(pcm16Array.length); // 8-bit array
-	for (let i = 0; i < pcm16Array.length; i++) {
-		// Scale 16-bit PCM (-32768 to 32767) to 8-bit PCM (0 to 255)
-		const sample = pcm16Array[i];
-		pcm8Array[i] = ((sample + 32768) >> 8); // Convert to range [0, 255]
-	}
-	return pcm8Array;
-}
 
 
 
@@ -197,7 +158,6 @@ fastify.register(async (fastify) => {
 
 			// console.log('Sending audio delta to Twilio:', audioDelta);
 			plivoWs.send(JSON.stringify(audioDelta));
-
 		});
 
 		client.on('conversation.updated', async ({ item, delta }) => {
@@ -207,81 +167,46 @@ fastify.register(async (fastify) => {
 			} else {
 				console.error('logWs is not open or not defined');
 			}
-
-			if (delta?.audio) {
-				// const resampledAudio = resamplePCM(delta.audio, 24000);
-				const base64Audio = Buffer.from(delta.audio).toString('base64');
-				const audioDelta = {
-					event: 'playAudio',
-					media: {
-						contentType: "audio/x-mulaw: 8000",
-						// a base64 encoded string of 8000/mulaw
-						payload: base64Audio
-					}
-				};
-				console.log('Sending audio delta to Plivo', { event: 'playAudio', media: { payload: 'truncated' }});
-				//plivoWs.send(JSON.stringify(audioDelta));
-			}
 		});
 
+		let audioBuffer = [];
+		let audioBufferStartTime = Date.now();
 		// Handle incoming messages from Plivo
 		plivoWs.on('message', (message) => {
+			
 			try {
 				const data = JSON.parse(message);
 				switch (data.event) {
 					case 'media':
-						// console.log('Received media event', data);
 						if (client.realtime.isConnected()) {
-							// console.log(data.media.payload, 'data.media.payload')
-
-							function linearToMuLawSample(sample) {
-								const MU_LAW_MAX = 0x1FFF;
-								const MU_LAW_BIAS = 33;
-
-								// Determine the sign and get the magnitude
-								let sign = (sample >> 8) & 0x80;
-								if (sign !== 0) {
-									sample = -sample;
-								}
-								if (sample > MU_LAW_MAX) {
-									sample = MU_LAW_MAX;
-								}
-								// Apply μ-law compression
-								sample = sample + MU_LAW_BIAS;
-								let exponent = Math.floor(Math.log(sample) / Math.log(2));
-								let mantissa = (sample >> (exponent - 3)) & 0x0F;
-								let muLawByte = ~(sign | (exponent << 4) | mantissa);
+							// Log data.media without payload
+							const mediaWithoutPayload = { ...data.media };
+							delete mediaWithoutPayload.payload;
+							console.log('Send to Plivo:', mediaWithoutPayload);
 							
-								return muLawByte & 0xFF;
-							}
-
-							function base64L16ToMuLaw(base64Str) {
-								const pcmBuffer = Buffer.from(base64Str, 'base64');
-								const muLawBuffer = Buffer.alloc(pcmBuffer.length / 2);
-								for (let i = 0; i < pcmBuffer.length; i += 2) {
-									// Read 16-bit sample (big-endian)
-									const sample = pcmBuffer.readInt16BE(i);
-									// Convert to μ-law
-									const muLawSample = linearToMuLawSample(sample);
-									// Store the μ-law sample
-									muLawBuffer[i / 2] = muLawSample;
-								}
-								return muLawBuffer;
+							// Collect audio payloads
+							if (!audioBuffer) {
+								audioBuffer = [];
+								audioBufferStartTime = Date.now();
 							}
 							
-							const base64Input = data.media.payload;
-							const muLawBuffer = base64L16ToMuLaw(base64Input);
-							// If you need the output as a base64 string
-							const base64MuLawOutput = muLawBuffer.toString('base64');
-
-							client.realtime.send('input_audio_buffer.append', {
-								audio: base64MuLawOutput,
-							});
+							audioBuffer.push(data.media.payload);
+							
+							// Check if we have collected 1 second worth of audio
+							if (Date.now() - audioBufferStartTime >= 1000) {
+								const combinedAudio = audioBuffer.join('');
+								client.realtime.send('input_audio_buffer.append', {
+									audio: combinedAudio,
+								});
+								
+								// Reset buffer and start time
+								audioBuffer = [];
+								audioBufferStartTime = Date.now();
+							}
 						}
 						break;
 					case 'start':
 						console.log('Incoming stream has started', data);
-						client.sendUserMessageContent([{ type: 'input_text', text: `How are you?` }]);
 						break;
 					default:
 						console.log('Received non-media event:', data.event);

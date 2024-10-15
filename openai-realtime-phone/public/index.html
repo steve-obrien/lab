@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 
 	<head>
 		<meta charset="UTF-8">
@@ -7,82 +7,86 @@
 		<title>AI Call Interface</title>
 		<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 		<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+		<link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/default.min.css">
+		<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+		<script>hljs.highlightAll();</script>
 	</head>
 
-	<body class="bg-gray-100 text-gray-900">
-		<div class="flex" id="app">
-			<div class="w-full overflow-x-scroll p-4">
-				<call-logs></call-logs>
-			</div>
-			<div class="w-[300px] p-4">
+	<body class=" text-black h-full">
+		<div class="w-full h-full p-2 bg-gray-200 " id="app">
+			<div class="flex h-full shadow-lg bg-white border rounded">
+				<div class="w-full overflow-x-scroll flex flex-col">
+					<h1 class="text-xl font-light text-black border-b p-4">AI Call Interface</h1>
+					<call-logs class="p-4 h-full"></call-logs>
+				</div>
+				<div class="w-96 p-6 border-l">
 
-				<h1 class="text-3xl font-bold mb-4">AI Call Interface</h1>
-				<p class="mb-4">Enter a phone number to make a call:</p>
-				<form @submit.prevent="makeCall" id="callForm" class="bg-white p-6 rounded shadow-md">
-					<select v-model="selectedFile" @change="loadInstructions" id="instructionFiles" class="w-full p-2 border border-gray-300 rounded mb-4">
-						<option value="new">New...</option>
-						<option v-for="file in instructionFiles" :key="file" :value="file">{{ file.name }}</option>
-					</select>
-					<textarea v-model="instructions" id="instructions" rows="5" placeholder="AI instructions" class="w-full p-2 border border-gray-300 rounded mb-4"></textarea><br>
-					<input v-model="phoneNumber" type="text" id="phoneNumber" placeholder="Enter phone number" required class="w-full p-2 border border-gray-300 rounded mb-4">
-					<button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Make Call</button>
-					<button type="button" @click="saveInstructions" id="saveButton" class="bg-green-500 text-white px-4 py-2 rounded ml-2">Save</button>
-				</form>
+					<form @submit.prevent="makeCall" id="callForm" class="flex flex-col rounded-lg">
+						<p class="font-medium text-black mb-2">Instructions</p>
+						<select v-model="selectedFile" @change="loadInstructions" id="instructionFiles" class="w-full p-2 border border-gray-200 rounded mb-2 bg-gray-100 text-black">
+							<option value="new">New...</option>
+							<option v-for="file in instructionFiles" :key="file" :value="file">{{ file.name }}</option>
+						</select>
+						<textarea v-model="instructions" id="instructions" rows="5" placeholder="AI instructions" class="block w-full rounded-md border-0 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-1 focus:ring-inset focus:ring-indigo-600 p-2 mb-2"></textarea>
+						<button type="button" @click="saveInstructions" id="saveButton" class="bg-gray-500 text-white px-4 py-2 rounded-lg ml-auto">Save</button>
+
+						<p class="font-medium text-black mt-4 mb-2">Make a call</p>
+						<input v-model="phoneNumber" type="text" id="phoneNumber" placeholder="Enter phone number" required class="w-full p-2 border border-gray-200 rounded mb-3 bg-gray-100 text-black">
+						<button type="submit" class="bg-gray-500 text-white px-4 py-2 rounded-lg">Make Call</button>
+
+					</form>
+				</div>
 			</div>
 		</div>
+
+		<template id="call-log">
+			<div class="h-full overflow-y-auto ">
+				<div class="">
+					<div class="">conversation</div>
+					<div class="">
+						<div v-if="!items.length">awaiting connection...</div>
+						<div v-for="(cnvItem, i) in items" :key="cnvItem.id" class="flex mt-8">
+							<div class="w-24 leading-5 mb-4 flex-shrink-0 sm:mb-0 sm:mr-4 text-gray-400 text-xs ">
+								00:00 {{ cnvItem.status }} {{ cnvItem.elapsedTime }} {{ toTime(cnvItem.startTime) }}
+							</div>
+							<div class="flex flex-col gap-1 group w-full">
+								<div class="flex" :class="cnvItem.role == 'user' ? 'text-green-700' : 'text-black'">
+									<div class="uppercase font-bold leading-5">
+										{{ (cnvItem.role || cnvItem.type).replaceAll('_', ' ') }}
+									</div>
+								</div>
+								<div class="speaker-content w-full">
+									<!-- tool call -->
+									<div v-if="cnvItem.formatted.tool">
+										<pre class="rounded w-full text-sm"><code class="json rounded-lg">{{ cnvItem.formatted.tool.name }}({{ formatJson(cnvItem.formatted.tool.arguments) }})</code></pre>
+									</div>
+									<!-- tool response -->
+									<div v-if="cnvItem.type === 'function_call_output'">
+										<pre class="rounded w-full text-sm"><code class="json rounded-lg">{{ formatJson(cnvItem.formatted.output) }}</code></pre>
+									</div>
+									<div v-if="!cnvItem.formatted.tool && cnvItem.role === 'user'" class="text-light">
+										{{ cnvItem.formatted.transcript || (cnvItem.formatted.audio?.length ? '(awaiting transcript)' : cnvItem.formatted.text || '(item sent)')  }}
+									</div>
+									<div v-if="!cnvItem.formatted.tool && cnvItem.role === 'assistant'" class="text-light">
+										{{ cnvItem.formatted.transcript || cnvItem.formatted.text || '(truncated)' }}
+									</div>
+									<div v-if="cnvItem.formatted.file">
+										<audio :src="cnvItem.formatted.file.url" controls />
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</template>
 
 		<script>
 
 			const { createApp, ref, onMounted } = Vue;
 
 			const CallLogs = {
-				template: `
-					<div class="bg-white p-6 rounded shadow-md mt-8">
-						<h2 class="text-2xl font-bold mb-4">Call Logs</h2>
-						<div class="h-64 overflow-y-auto border border-gray-300 p-4">
-							<div v-for="(item, index) in items" :key="index" class="mb-2">
-							<!--  {{ item }} -->
-							</div>
-
-
-							<div class="content-block conversation">
-								<div class="content-block-title">conversation</div>
-								<div class="content-block-body">
-									<div v-if="!items.length">awaiting connection...</div>
-									<div v-for="(conversationItem, i) in items" :key="conversationItem.id" class="flex gap-4 group border-b border-gray-200">
-										<div class="flex w-20 font-mono" :class="conversationItem.role == 'assistant' ? 'text-green-700' : 'text-blue-700'">
-											<div>
-												{{ (conversationItem.role || conversationItem.type).replaceAll('_', ' ') }}
-											</div>
-											<div class="close invisible group-hover:visible" @click="deleteConversationItem(conversationItem.id)">
-												X
-											</div>
-										</div>
-										<div class="speaker-content font-mono w-full">
-											<!-- tool response -->
-											<div v-if="conversationItem.type === 'function_call_output'">
-												{{ conversationItem.formatted.output }}
-											</div>
-											<!-- tool call -->
-											<div v-if="conversationItem.formatted.tool">
-												{{ conversationItem.formatted.tool.name }}({{ conversationItem.formatted.tool.arguments }})
-											</div>
-											<div v-if="!conversationItem.formatted.tool && conversationItem.role === 'user'">
-												{{ conversationItem.formatted.transcript || (conversationItem.formatted.audio?.length ? '(awaiting transcript)' : conversationItem.formatted.text || '(item sent)') }}
-											</div>
-											<div v-if="!conversationItem.formatted.tool && conversationItem.role === 'assistant'">
-												{{ conversationItem.formatted.transcript || conversationItem.formatted.text || '(truncated)' }}
-											</div>
-											<div v-if="conversationItem.formatted.file">
-												<audio :src="conversationItem.formatted.file.url" controls />
-											</div>
-										</div>
-									</div>
-								</div>
-							</div>
-						</div>
-					</div>
-				`,
+				template: '#call-log',
 				data() {
 					return {
 						items: []
@@ -90,7 +94,7 @@
 				},
 				methods: {
 					connectWebSocket() {
-						
+
 						const host = window.location.host;
 						const socket = new WebSocket(`ws://${host}/log-stream`);
 
@@ -110,7 +114,6 @@
 
 						socket.onopen = () => {
 							console.log('WebSocket connection opened');
-
 							socket.send('ping');
 						};
 
@@ -119,14 +122,28 @@
 							setTimeout(this.connectWebSocket, 5000);
 						};
 
-					
 					},
 					deleteConversationItem(id) {
 						console.log('deleteConversationItem', id);
+					},
+					toTime(timestamp) {
+						const date = new Date(timestamp);
+						const hours = String(date.getUTCHours()).padStart(2, '0');
+						const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+						const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+						return `${hours}:${minutes}:${seconds}`;
+					},
+					formatJson(json) {
+						try {
+							return JSON.stringify(JSON.parse(json), null, 2);
+						} catch (e) {
+							return "";
+						}
 					}
 				},
 				mounted() {
 					this.connectWebSocket();
+					window.logs = this;
 				}
 			};
 
@@ -196,6 +213,389 @@
 				}
 			}
 			createApp(App).mount('#app');
+
+
+
+
+			const items = [
+				{
+					"id": "item_AIOeZHJ9zbJ2ORoUoJ8AP",
+					"object": "realtime.item",
+					"type": "message",
+					"status": "completed",
+					"role": "assistant",
+					"content": [
+						{
+							"type": "audio",
+							"transcript": "I'm sorry, I can't identify speakers from voice samples. How can I help you today?"
+						}
+					],
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": ""
+					}
+				},
+				{
+					"id": "item_AIOehcsa1bexqqONZlbs8",
+					"object": "realtime.item",
+					"type": "message",
+					"status": "completed",
+					"role": "user",
+					"content": [
+						{
+							"type": "input_audio",
+							"transcript": ""
+						}
+					],
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": " "
+					}
+				},
+				{
+					"id": "item_AIOeiNafjthVRB7hMq6IH",
+					"object": "realtime.item",
+					"type": "message",
+					"status": "completed",
+					"role": "assistant",
+					"content": [
+						{
+							"type": "audio",
+							"transcript": "Hello! How can I help you today?"
+						}
+					],
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": ""
+					}
+				},
+				{
+					"id": "item_AIOen3fZB41W4FsPqlHK9",
+					"object": "realtime.item",
+					"type": "message",
+					"status": "completed",
+					"role": "user",
+					"content": [
+						{
+							"type": "input_audio",
+							"transcript": "Wondering what you can do\n"
+						}
+					],
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": "Wondering what you can do\n"
+					}
+				},
+				{
+					"id": "item_AIOepyXlDJsXO5lFPBfzR",
+					"object": "realtime.item",
+					"type": "message",
+					"status": "completed",
+					"role": "assistant",
+					"content": [
+						{
+							"type": "audio",
+							"transcript": "I can help with a variety of tasks such as checking bank account details, looking up sort codes, registering direct debit donations, and providing weather information for specific locations. How can I assist you today?"
+						}
+					],
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": "I can help with a variety of tasks such as checking bank account details, looking up sort codes, registering direct debit donations, and providing weather information for specific locations. How can I assist you today?"
+					}
+				},
+				{
+					"id": "item_AIOkf7nzPCd1GQUDk0Kg7",
+					"object": "realtime.item",
+					"type": "message",
+					"status": "completed",
+					"role": "user",
+					"content": [
+						{
+							"type": "input_audio",
+							"transcript": ""
+						}
+					],
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": " "
+					}
+				},
+				{
+					"id": "item_AIOkgZv8QENfTJCHEuS90",
+					"object": "realtime.item",
+					"type": "message",
+					"status": "completed",
+					"role": "assistant",
+					"content": [
+						{
+							"type": "audio",
+							"transcript": "Hello! How can I assist you today?"
+						}
+					],
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": ""
+					}
+				},
+				{
+					"id": "item_AIOklMci6q2zZtk1ZRrYf",
+					"object": "realtime.item",
+					"type": "message",
+					"status": "completed",
+					"role": "user",
+					"content": [
+						{
+							"type": "input_audio",
+							"transcript": "I was wondering what you do.\n"
+						}
+					],
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": "I was wondering what you do.\n"
+					}
+				},
+				{
+					"id": "item_AIOkngShZdc67GHBYoEPL",
+					"object": "realtime.item",
+					"type": "message",
+					"status": "completed",
+					"role": "assistant",
+					"content": [
+						{
+							"type": "audio",
+							"transcript": "It seems like your message got cut off. Could you please repeat your question or let me know how I can help?"
+						}
+					],
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": ""
+					}
+				},
+				{
+					"id": "item_AIOkuM12WU8JpnPTUTUaC",
+					"object": "realtime.item",
+					"type": "message",
+					"status": "completed",
+					"role": "user",
+					"content": [
+						{
+							"type": "input_audio",
+							"transcript": "I was wondering what you were able to do.\n"
+						}
+					],
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": "I was wondering what you were able to do.\n"
+					}
+				},
+				{
+					"id": "item_AIOkwyUX6oJbsUmkdDVCQ",
+					"object": "realtime.item",
+					"type": "message",
+					"status": "completed",
+					"role": "assistant",
+					"content": [
+						{
+							"type": "audio",
+							"transcript": "I can help with a variety of tasks, such as looking up bank account and sort code information, registering direct debit donations, and providing weather updates for specific locations. If you have any questions or need assistance with any of these services, feel free to ask! Is there something specific I can help you with today?"
+						}
+					],
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": ""
+					}
+				},
+				{
+					"id": "item_AIOlUnPZWCfx2Ffos5CzW",
+					"object": "realtime.item",
+					"type": "message",
+					"status": "completed",
+					"role": "user",
+					"content": [
+						{
+							"type": "input_audio",
+							"transcript": ""
+						}
+					],
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": " "
+					}
+				},
+				{
+					"id": "item_AIOlVemAJIY7CIoIvgTbe",
+					"object": "realtime.item",
+					"type": "message",
+					"status": "completed",
+					"role": "assistant",
+					"content": [
+						{
+							"type": "audio",
+							"transcript": "I can help you with a variety of tasks, such as retrieving weather information, looking up bank account details, and registering donation payments. If you have a specific question or task in mind, feel free to let me know!"
+						}
+					],
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": ""
+					}
+				},
+				{
+					"id": "item_AIOlgDadKBwZmnILafc8n",
+					"object": "realtime.item",
+					"type": "message",
+					"status": "completed",
+					"role": "user",
+					"content": [
+						{
+							"type": "input_audio",
+							"transcript": "Yes, get the web details, Steve.\n"
+						}
+					],
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": "Yes, get the web details, Steve.\n"
+					}
+				},
+				{
+					"id": "item_AIOljW0P0S8THSKNYC5SA",
+					"object": "realtime.item",
+					"type": "message",
+					"status": "completed",
+					"role": "assistant",
+					"content": [
+						{
+							"type": "audio",
+							"transcript": "I can help with that. Please provide the location you're interested in, and I can get the weather details for you."
+						}
+					],
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": ""
+					}
+				},
+				{
+					"id": "item_AIOm6hB3knbwJ35YoSaB7",
+					"object": "realtime.item",
+					"type": "message",
+					"status": "completed",
+					"role": "user",
+					"content": [
+						{
+							"type": "input_audio",
+							"transcript": "would like or whatever.\n"
+						}
+					],
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": "would like or whatever.\n"
+					}
+				},
+				{
+					"id": "item_AIOm8vhNAVpV4ZR7ayaIJ",
+					"object": "realtime.item",
+					"type": "message",
+					"status": "completed",
+					"role": "assistant",
+					"content": [
+						{
+							"type": "audio",
+							"transcript": "I can help you with that! Could you please provide the name of the location or the coordinates (latitude and longitude) for the weather information you're looking for?"
+						}
+					],
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": ""
+					}
+				},
+				{
+					"id": "item_AIOmNfNBzv8DtQg8x6nJY",
+					"object": "realtime.item",
+					"type": "message",
+					"status": "completed",
+					"role": "user",
+					"content": [
+						{
+							"type": "input_audio",
+							"transcript": "with a crystal K.\n"
+						}
+					],
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": "with a crystal K.\n"
+					}
+				},
+				{
+					"id": "item_AIOmRFFv36FN3HQ85QhCj",
+					"object": "realtime.item",
+					"type": "function_call",
+					"status": "completed",
+					"name": "get_weather",
+					"call_id": "call_Sc6tgSlJXXwjK2Mf",
+					"arguments": "{\"lat\":51.4779,\"lng\":-0.0015,\"location\":\"Greenwich, UK\"}",
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": "",
+						"tool": {
+							"type": "function",
+							"name": "get_weather",
+							"call_id": "call_Sc6tgSlJXXwjK2Mf",
+							"arguments": "{\"lat\":51.4779,\"lng\":-0.0015,\"location\":\"Greenwich, UK\"}"
+						}
+					}
+				},
+				{
+					"id": "item_AIOmSDSTfIhlfv9gASJMN",
+					"object": "realtime.item",
+					"type": "function_call_output",
+					"call_id": "call_Sc6tgSlJXXwjK2Mf",
+					"output": "{\"latitude\":51.48,\"longitude\":-2.3841858e-7,\"generationtime_ms\":0.04398822784423828,\"utc_offset_seconds\":0,\"timezone\":\"GMT\",\"timezone_abbreviation\":\"GMT\",\"elevation\":33,\"current_units\":{\"time\":\"iso8601\",\"interval\":\"seconds\",\"temperature_2m\":\"°C\",\"wind_speed_10m\":\"km/h\"},\"current\":{\"time\":\"2024-10-14T23:15\",\"interval\":900,\"temperature_2m\":10.3,\"wind_speed_10m\":3.6}}",
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": "",
+						"output": "{\"latitude\":51.48,\"longitude\":-2.3841858e-7,\"generationtime_ms\":0.04398822784423828,\"utc_offset_seconds\":0,\"timezone\":\"GMT\",\"timezone_abbreviation\":\"GMT\",\"elevation\":33,\"current_units\":{\"time\":\"iso8601\",\"interval\":\"seconds\",\"temperature_2m\":\"°C\",\"wind_speed_10m\":\"km/h\"},\"current\":{\"time\":\"2024-10-14T23:15\",\"interval\":900,\"temperature_2m\":10.3,\"wind_speed_10m\":3.6}}"
+					},
+					"status": "completed"
+				},
+				{
+					"id": "item_AIOmS2g703elItoXqhWNJ",
+					"object": "realtime.item",
+					"type": "message",
+					"status": "completed",
+					"role": "assistant",
+					"content": [
+						{
+							"type": "audio",
+							"transcript": "The current weather in Greenwich, UK, is 10.3°C with a light wind speed of 3.6 km/h."
+						}
+					],
+					"formatted": {
+						"audio": {},
+						"text": "",
+						"transcript": "The current weather in Greenwich, UK, is 10.3°C with a light wind speed of 3.6 km/h."
+					}
+				}
+			];
+			// window.logs.items = items;
 
 		</script>
 	</body>
