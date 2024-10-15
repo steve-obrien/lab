@@ -162,8 +162,6 @@ fastify.register(async (fastify) => {
 		// play the audio
 		client.realtime.on('server.response.audio.delta', (response) => {
 			// Track the time when we start sending audio
-			console.log('server.response.audio.delta', response.item);
-
 			const audioDelta = {
 				event: 'media',
 				streamSid: streamSid,
@@ -188,14 +186,13 @@ fastify.register(async (fastify) => {
 		// we can use this to stop audio playback of a previous response if necessary
 		client.on('conversation.interrupted', async () => {
 			console.log('>> Conversation interrupted', currentItem.id);
-			const samples = 0;
+			let samples = 0;
 			let item = client.conversation.getItem(currentItem.id);
 			if (item) {
 				item.elapsedTime = Date.now() - item.startTime;
 				console.log('Elapsed time:', item.elapsedTime);
 				samples = item.elapsedTime * 8
 				// truncate to whisper api to get the audio.
-				
 			}
 			// 8000 Hz 8 samples per millisecond
 			console.log('samples:', samples, 'time:', samples / 8);
@@ -216,7 +213,6 @@ fastify.register(async (fastify) => {
 						//   media: { track: 'inbound', chunk: '829', timestamp: '16653', payload: '...' },
 						//   streamSid: 'MZc3c3f2dda2bb10bf3fa1587f52d40548'
 						// }
-
 						// aparently I should be using this:  client.appendInputAudio(data);
 						if (client.realtime.isConnected()) {
 							client.realtime.send('input_audio_buffer.append', {
