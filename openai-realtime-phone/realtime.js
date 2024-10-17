@@ -9,7 +9,12 @@ import fastifyStatic from '@fastify/static';
 import path from 'path';
 import { RealtimeClient } from '@openai/realtime-api-beta';
 import registerInstructionsRoutes from './instructions.js';
-import fetch from 'node-fetch';
+// import fetch from 'node-fetch';
+import jsdom from "jsdom";
+const { JSDOM } = jsdom;
+import { addTools } from './tools.js';
+
+
 
 // Load environment variables from .env file
 dotenv.config();
@@ -53,7 +58,6 @@ let aiConfig = {
 	instructions: 'You are a sales agent for Newicon.net trying to sell software app development.',
 	silence: 1000
 }
-
 
 // List of Event Types to log to the console. See OpenAI Realtime API Documentation. (session.updated is handled separately.)
 const LOG_EVENT_TYPES = [
@@ -109,6 +113,7 @@ fastify.register(async (fastify) => {
 	fastify.get('/media-stream', { websocket: true }, async (twilioWs, req) => {
 
 		let streamSid = null;
+		let callSid = null;
 
 		console.log('Client connected');
 
@@ -143,11 +148,40 @@ fastify.register(async (fastify) => {
 				input_audio_transcription: { model: 'whisper-1' }
 			});
 			addTools(client)
+			client.addTool(
+				{
+					name: 'hangup',
+					description:
+						'Do not call this function without saying goodbye first',
+					parameters: {},
+				},
+				async () => {
+					twilioClient.calls(callSid)
+					.update({ status: 'completed' })
+					.then(call => { 
+						console.log(`Call ${call.sid} has been terminated.`)
+						client.disconnect();
+					})
+					.catch(err => {
+						console.error(err);
+						client.disconnect();
+					});
+				}
+			);
+		
 			// client.sendUserMessageContent([{
 			// 	type: `input_text`,
 			// 	text: ``
 			// }]);
 		}, 250);
+
+
+
+		client.realtime.on('server.session.created', (event) => {
+			console.log('session created', event)
+			// event.session.id
+			// multiple sessions can occur - group them by session id
+		})
 
 		let currentItem = { id: null };
 
@@ -173,11 +207,11 @@ fastify.register(async (fastify) => {
 				twilioWs.send(JSON.stringify(audioDelta));
 			});
 
-			 // If we have a speech item, can populate audio
-			 if (queuedSpeechItems[item.id]) {
+			// If we have a speech item, can populate audio
+			if (queuedSpeechItems[item.id]) {
 				item.formatted.audio = queuedSpeechItems[item.id].audio;
 				delete queuedSpeechItems[item.id]; // free up some memory
-			  }
+			}
 		})
 
 		/**
@@ -242,7 +276,7 @@ fastify.register(async (fastify) => {
 		let inputAudioBuffer = []
 		let queuedSpeechItems = []
 		client.realtime.on('server.input_audio_buffer.speech_started', (event) => {
-			const {item_id, audio_start_ms } = event;
+			const { item_id, audio_start_ms } = event;
 			// this gives audio_start_ms
 			console.log('speech started')
 			userAudioRecord = true
@@ -252,7 +286,7 @@ fastify.register(async (fastify) => {
 		});
 
 		client.realtime.on('server.input_audio_buffer.speech_stopped', (event) => {
-			const {item_id, audio_end_ms } = event;
+			const { item_id, audio_end_ms } = event;
 			if (!queuedSpeechItems[item_id]) {
 				queuedSpeechItems[item_id] = { audio_start_ms: audio_end_ms };
 			}
@@ -302,7 +336,9 @@ fastify.register(async (fastify) => {
 						break;
 					case 'start':
 						streamSid = data.start.streamSid;
+						callSid = data.start.callSid;
 						console.log('Incoming stream has started', data, streamSid);
+
 						break;
 					case 'dtmf':
 						console.log('Received dtmf:', data.dtmf.digit);
@@ -367,167 +403,7 @@ fastify.all('/incoming-call', async (request, reply) => {
 });
 
 
-/**
- * Add tools to the client
- * @param {RealtimeClient} client 
- */
-function addTools(client) {
 
-	/**
-	 * Enable the AI to get the weather
-	 */
-	client.addTool(
-		{
-			name: 'get_weather',
-			description:
-				'Retrieves the weather for a given lat, lng coordinate pair. Specify a label for the location.',
-			parameters: {
-				type: 'object',
-				properties: {
-					lat: {
-						type: 'number',
-						description: 'Latitude',
-					},
-					lng: {
-						type: 'number',
-						description: 'Longitude',
-					},
-					location: {
-						type: 'string',
-						description: 'Name of the location',
-					},
-				},
-				required: ['lat', 'lng', 'location'],
-			},
-		},
-		async ({ lat, lng, location }) => {
-			//setMarker({ lat, lng, location }); (used to set cords on a map)
-			//setCoords({ lat, lng, location });
-			const result = await fetch(
-				`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,wind_speed_10m`
-			);
-			const json = await result.json();
-			const temperature = {
-				value: json.current.temperature_2m,
-				units: json.current_units.temperature_2m,
-			};
-			const wind_speed = {
-				value: json.current.wind_speed_10m,
-				units: json.current_units.wind_speed_10m,
-			};
-			// setMarker({ lat, lng, location, temperature, wind_speed });
-			return json;
-		}
-	);
-
-	client.addTool(
-		{
-			name: 'sort_code_lookup',
-			description:
-				'Looks up a bank account sort code to check it is valid and return information on the specific bank allowing the user to confirm',
-			parameters: {
-				type: 'object',
-				properties: {
-					sort_code: {
-						type: 'string',
-						description: 'The sort code for example: 40-14-21',
-					},
-				},
-				required: ['sort_code'],
-			},
-		},
-		async ({ sort_code }) => {
-
-			return {
-				"result": "VALID",
-				"bank": "HSBC, Downend branch"
-			}
-
-		}
-	);
-
-	client.addTool(
-		{
-			name: 'account_number_lookup',
-			description:
-				'Looks up a bank account number to check it is valid',
-			parameters: {
-				type: 'object',
-				properties: {
-					sort_code: {
-						type: 'string',
-						description: 'The sort code for example: 40-14-21',
-					},
-					account_number: {
-						type: 'number',
-						description: 'The account number',
-					},
-				},
-				required: ['sort_code', 'account_number'],
-			},
-		},
-		async ({ sort_code, account_number }) => {
-
-			return {
-				"result": "VALID",
-				"bank": "HSBC"
-			}
-
-		}
-	);
-
-	client.addTool(
-		{
-			name: 'donation',
-			description:
-				'Registers a direct debit subscription payment',
-			parameters: {
-				type: 'object',
-				properties: {
-					sort_code: {
-						type: 'string',
-						description: 'The sort code for example: 40-14-21',
-					},
-					account_number: {
-						type: 'number',
-						description: 'The account number',
-					},
-					amount: {
-						type: 'number',
-						description: 'The donation amount in pounds sterling',
-					},
-				},
-				required: ['sort_code', 'account_number', 'amount'],
-			},
-		},
-		async ({ sort_code, account_number, amount }) => {
-
-			return {
-				"result": "success"
-			}
-
-		}
-	);
-
-	client.addTool(
-		{
-			name: 'hangup',
-			description:
-				'Do not call this function without saying goodbye first',
-			parameters: {},
-		},
-		async ({ sort_code, account_number, amount }) => {
-
-
-			// client.disconnect();
-			return {
-				"result": "success"
-			}
-
-		}
-	);
-
-}
 
 fastify.listen({ port: PORT }, (err) => {
 	if (err) {
