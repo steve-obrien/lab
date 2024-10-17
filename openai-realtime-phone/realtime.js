@@ -295,6 +295,7 @@ fastify.register(async (fastify) => {
 							client.realtime.send('input_audio_buffer.append', {
 								audio: data.media.payload,
 							});
+							// client.appendInputAudio(Buffer.from(data.media.payload, 'base64'));
 							// add to buffer
 							inputAudioBuffer = inputAudioBuffer.concat(Array.from(Buffer.from(data.media.payload, 'base64')));
 						}
