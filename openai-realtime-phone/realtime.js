@@ -22,13 +22,12 @@ if (!OPENAI_API_KEY) {
 	process.exit(1);
 }
 
+const PORT = process.env.PORT || 5050; // Allow dynamic port assignment
 // Twilio credentials
 const TWILIO_PHONE_NUMBER = '+441202144991'; // Your Twilio phone number
-
 // Initialize Twilio client
 const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 
-let instructions = 'You are a sales agent for Newicon.net trying to sell software app development.';
 
 // Initialize Fastify
 const fastify = Fastify();
@@ -36,7 +35,6 @@ fastify.register(fastifyFormBody);
 fastify.register(fastifyWs);
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { ClientRequest } from 'http';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -50,9 +48,11 @@ fastify.register(fastifyStatic, {
 
 registerInstructionsRoutes(fastify);
 
-// Constants
-const VOICE = 'shimmer';
-const PORT = process.env.PORT || 5050; // Allow dynamic port assignment
+let aiConfig = {
+	voice: 'shimmer',
+	instructions: 'You are a sales agent for Newicon.net trying to sell software app development.',
+	silence: 1000
+}
 
 
 // List of Event Types to log to the console. See OpenAI Realtime API Documentation. (session.updated is handled separately.)
@@ -74,7 +74,7 @@ let logWs = null;
 // Route to handle outbound call requests
 fastify.post('/make-call', async (request, reply) => {
 	const to = request.body.to;
-	instructions = request.body.instructions;
+	Object.assign(aiConfig, { ...request.body });
 
 	try {
 		const call = await twilioClient.calls.create({
@@ -115,7 +115,6 @@ fastify.register(async (fastify) => {
 		const client = new RealtimeClient({
 			apiKey: OPENAI_API_KEY
 		});
-
 		// Change the defaultFrequency to 8,000 Hz
 		client.realtime.defaultFrequency = 8_000;
 
@@ -133,41 +132,66 @@ fastify.register(async (fastify) => {
 					type: 'server_vad',
 					threshold: 0.5,
 					prefix_padding_ms: 300,
-					silence_duration_ms: 1000
+					silence_duration_ms: aiConfig.silence
 				},
 				input_audio_format: 'g711_ulaw',
 				output_audio_format: 'g711_ulaw',
-				voice: VOICE,
-				instructions: instructions,
+				voice: aiConfig.voice,
+				instructions: aiConfig.instructions,
 				modalities: ["text", "audio"],
 				temperature: 0.8,
 				input_audio_transcription: { model: 'whisper-1' }
 			});
 			addTools(client)
+			// client.sendUserMessageContent([{
+			// 	type: `input_text`,
+			// 	text: ``
+			// }]);
 		}, 250);
 
-		let itemTimeTracker = { }
 		let currentItem = { id: null };
 
-		let timer = null
+		// response.item
+		const audioBuffers = {}
+
 		// this is triggered when the AI starts speaking
 		client.realtime.on('server.conversation.item.created', (event) => {
+			console.log('server.conversation.item.created', event.item.id)
+
 			let item = client.conversation.getItem(event.item.id);
 			item.startTime = Date.now();
-			// currentItem = event.item
-			console.log('!!!!!SERVER  conversation.item.created', event);
-			item.startTime = Date.now();
+
+			audioBuffers[item.id] = new MuLawAudioBuffer();
+
+			audioBuffers[item.id].startStreaming((chunk) => {
+				//console.log("Streaming audio chunk:", audioBuffers[item.id].currentSample, audioBuffers[item.id].buffer.length);
+				const audioDelta = {
+					event: 'media',
+					streamSid: streamSid,
+					media: { payload: Buffer.from(chunk).toString('base64') }
+				};
+				twilioWs.send(JSON.stringify(audioDelta));
+			});
+
+			 // If we have a speech item, can populate audio
+			 if (queuedSpeechItems[item.id]) {
+				item.formatted.audio = queuedSpeechItems[item.id].audio;
+				delete queuedSpeechItems[item.id]; // free up some memory
+			  }
 		})
 
-		// play the audio
+		/**
+		 * Handles audio response from OpenAI
+		 * 
+		 * @param {Object} response - The response object from OpenAI
+		 * @param {Object} response.item - The item object
+		 * @param {Object} response.delta - The delta object containing the audio data
+		 */
 		client.realtime.on('server.response.audio.delta', (response) => {
-			// Track the time when we start sending audio
-			const audioDelta = {
-				event: 'media',
-				streamSid: streamSid,
-				media: { payload: response.delta }
-			};
-			twilioWs.send(JSON.stringify(audioDelta));
+			// Define the callback to handle sending the audio chunks for playback
+			client.appendInputAudio(response.delta)
+			if (currentItem.id)
+				audioBuffers[currentItem.id].append(Buffer.from(response.delta, 'base64'))
 		});
 
 		client.on('conversation.updated', async ({ item, delta }) => {
@@ -185,20 +209,73 @@ fastify.register(async (fastify) => {
 		// in VAD mode, the user starts speaking
 		// we can use this to stop audio playback of a previous response if necessary
 		client.on('conversation.interrupted', async () => {
-			console.log('>> Conversation interrupted', currentItem.id);
-			let samples = 0;
+
+			if (audioBuffers[currentItem.id] == undefined)
+				return;
+
 			let item = client.conversation.getItem(currentItem.id);
+			let samples = audioBuffers[currentItem.id].interrupt();
+
 			if (item) {
+				item.playedAudio = audioBuffers[item.id].getAudioUntilInterrupt();
+				item.audioFinished = true;
+				logWs.send(JSON.stringify(item));
+				// now we can delete the audio buffer to free memory
+				// delete audioBuffers[item.id];
+				console.log('>> Conversation interrupted', currentItem.id);
 				item.elapsedTime = Date.now() - item.startTime;
-				console.log('Elapsed time:', item.elapsedTime);
-				samples = item.elapsedTime * 8
+
+				// if we have finished playing the audio we need to make the item null
+				if (audioBuffers[item.id].finishedPlayback()) {
+					item = null;
+				}
 				// truncate to whisper api to get the audio.
 			}
 			// 8000 Hz 8 samples per millisecond
-			console.log('samples:', samples, 'time:', samples / 8);
 			await client.cancelResponse(item?.id, samples);
 			twilioWs.send(JSON.stringify({ event: 'clear', streamSid: streamSid }));
 		});
+
+		let userAudioBuffer = [];
+		let userAudioRecord = false;
+		let userAudioItem = null
+		let inputAudioBuffer = []
+		let queuedSpeechItems = []
+		client.realtime.on('server.input_audio_buffer.speech_started', (event) => {
+			const {item_id, audio_start_ms } = event;
+			// this gives audio_start_ms
+			console.log('speech started')
+			userAudioRecord = true
+			userAudioBuffer = []
+			userAudioItem = event.item_id
+			queuedSpeechItems[item_id] = { audio_start_ms };
+		});
+
+		client.realtime.on('server.input_audio_buffer.speech_stopped', (event) => {
+			const {item_id, audio_end_ms } = event;
+			if (!queuedSpeechItems[item_id]) {
+				queuedSpeechItems[item_id] = { audio_start_ms: audio_end_ms };
+			}
+			let speech = queuedSpeechItems[item_id];
+			console.log('speech stopped')
+			// this gives audio_end_ms
+			// meaning a buffer recording can
+			// slice an input buffer
+			speech.audio_end_ms = event.audio_end_ms;
+			if (inputAudioBuffer) {
+				const startIndex = Math.floor(
+					(speech.audio_start_ms * client.realtime.defaultFrequency) / 1000,
+				);
+				const endIndex = Math.floor(
+					(speech.audio_end_ms * client.realtime.defaultFrequency) / 1000,
+				);
+				speech.audio = inputAudioBuffer.slice(startIndex, endIndex);
+			}
+
+			userAudioRecord = false
+			userAudioItem = event.item_id
+		});
+
 
 		// Handle incoming messages from Twilio
 		twilioWs.on('message', (message) => {
@@ -206,24 +283,28 @@ fastify.register(async (fastify) => {
 				const data = JSON.parse(message);
 				switch (data.event) {
 					case 'media':
-						// data:
-						// { 
-						//   event: 'media',
-						//   sequenceNumber: '830',
-						//   media: { track: 'inbound', chunk: '829', timestamp: '16653', payload: '...' },
-						//   streamSid: 'MZc3c3f2dda2bb10bf3fa1587f52d40548'
-						// }
-						// aparently I should be using this:  client.appendInputAudio(data);
 						if (client.realtime.isConnected()) {
+							if (userAudioRecord == true) {
+								userAudioBuffer = userAudioBuffer.concat(Array.from(Buffer.from(data.media.payload, 'base64')));
+							}
+							let item = client.conversation.getItem(userAudioItem);
+							if (item) {
+								item.playedAudio = userAudioBuffer
+								logWs.send(JSON.stringify(item));
+							}
 							client.realtime.send('input_audio_buffer.append', {
 								audio: data.media.payload,
 							});
+							// add to buffer
+							inputAudioBuffer = inputAudioBuffer.concat(Array.from(Buffer.from(data.media.payload, 'base64')));
 						}
 						break;
 					case 'start':
 						streamSid = data.start.streamSid;
 						console.log('Incoming stream has started', data, streamSid);
 						break;
+					case 'dtmf':
+						console.log('Received dtmf:', data.dtmf.digit);
 					default:
 						console.log('Received non-media event:', data.event);
 						break;
@@ -283,6 +364,7 @@ fastify.all('/incoming-call', async (request, reply) => {
 
 	reply.type('text/xml').send(twimlResponse);
 });
+
 
 /**
  * Add tools to the client
@@ -359,7 +441,7 @@ function addTools(client) {
 				"result": "VALID",
 				"bank": "HSBC, Downend branch"
 			}
-			
+
 		}
 	);
 
@@ -389,7 +471,7 @@ function addTools(client) {
 				"result": "VALID",
 				"bank": "HSBC"
 			}
-			
+
 		}
 	);
 
@@ -422,7 +504,7 @@ function addTools(client) {
 			return {
 				"result": "success"
 			}
-			
+
 		}
 	);
 
@@ -430,16 +512,17 @@ function addTools(client) {
 		{
 			name: 'hangup',
 			description:
-				'Ends the call',
+				'Do not call this function without saying goodbye first',
 			parameters: {},
 		},
 		async ({ sort_code, account_number, amount }) => {
 
-			client.disconnect();
+
+			// client.disconnect();
 			return {
 				"result": "success"
 			}
-			
+
 		}
 	);
 
@@ -452,3 +535,107 @@ fastify.listen({ port: PORT }, (err) => {
 	}
 	console.log(`Server is listening on port ${PORT}`);
 });
+
+
+class MuLawAudioBuffer {
+	constructor(sampleRate = 8000, chunkSize = 2000) {
+		this.sampleRate = sampleRate;  // 8000 Hz
+		this.chunkSize = chunkSize;    // 250ms chunks
+		this.buffer = [];              // Holds the encoded audio data
+		this.currentSample = 0;        // Tracks current playback position
+		this.isPlaying = false;        // Indicates whether audio is playing
+		this.sendCallback = () => { };      // Function to send audio chunks
+		this.finishedCallback = () => { };
+		this.checkInterval = 50;       // Check for new audio every 50ms
+		this.checkCounter = 0;         // Counter to track when to send audio
+		this.start = null;         // Counter to track when to send audio
+	}
+
+	// Append new μ-law encoded audio data to the buffer
+	append(audioData) {
+		this.buffer = this.buffer.concat(Array.from(audioData));
+		//console.log('append chunk', this.buffer.length)
+	}
+
+	// Start streaming the audio in chunks of 1 second
+	startStreaming(sendCallback) {
+		this.start = Date.now();
+		this.sendCallback = sendCallback;
+		this.isPlaying = true;
+		this._stream();
+	}
+
+	audioFinished(finishedCallback) {
+		this.finishedCallback = finishedCallback
+	}
+
+	// Internal method to handle streaming
+	_stream() {
+		if (!this.isPlaying) return;
+
+		// Check for new audio data every 50ms
+		this.checkCounter++;
+		if (this.checkCounter >= 5) { // Send audio every 0.25 second (5 * 50ms)
+			const nextChunkEnd = Math.min(this.currentSample + this.chunkSize, this.buffer.length);
+			const chunk = this.buffer.slice(this.currentSample, nextChunkEnd);
+
+			// Send chunk through callback
+			this.sendCallback(chunk);
+
+			this.currentSample = nextChunkEnd;
+			this.checkCounter = 0; // Reset counter after sending
+
+			// Check if we've reached the end of the buffer
+			if (this.finishedPlayback()) {
+				this.finishedCallback(); // Call finished callback
+				// just in case the audio is jittery we wait before canneling the loop
+				setTimeout(() => { this.isPlaying = false }, 2000)
+				// we should stop the timeout function 
+			}
+		}
+
+		// Set a timeout for the next check
+		setTimeout(() => this._stream(), this.checkInterval);
+	}
+
+	// Stop streaming and return the current sample number
+	interrupt() {
+		this.isPlaying = false;
+		return this.currentSample;
+	}
+
+	// Get the audio from the start up to the current sample
+	getAudioUntilInterrupt() {
+		return this.buffer.slice(0, this.currentSample);
+	}
+
+	getTotalSamples() {
+		return this.buffer.length;
+	}
+
+	finishedPlayback() {
+		return (this.currentSample >= this.buffer.length);
+	}
+
+	getPlayedDuration() {
+		// Calculate the duration of the played audio in seconds
+		return (this.currentSample / this.sampleRate);
+	}
+}
+
+// Example usage:
+
+// const audioBuffer = new MuLawAudioBuffer();
+
+// // Simulate appending new μ-law encoded audio data (replace with actual data)
+// const newAudioData = new Uint8Array([/* ... μ-law encoded data ... */]);
+// audioBuffer.append(newAudioData);
+
+
+// // Simulate interrupt after 3 seconds
+// setTimeout(() => {
+// 	const interruptedAtSample = audioBuffer.interrupt();
+// 	console.log("Playback interrupted at sample:", interruptedAtSample);
+// 	const audioDataUntilInterrupt = audioBuffer.getAudioUntilInterrupt();
+// 	console.log("Audio until interrupt:", audioDataUntilInterrupt);
+// }, 3000);

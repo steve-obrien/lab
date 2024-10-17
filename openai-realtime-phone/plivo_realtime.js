@@ -141,22 +141,23 @@ fastify.register(async (fastify) => {
 				temperature: 0.8,
 				input_audio_transcription: { model: 'whisper-1' }
 			});
+			client.sendUserMessageContent([{
+				type: `input_text`,
+				text: `For testing purposes, I want you to list ten car brands. Number each item, e.g. "one (or whatever number you are one): the item name".`
+			}]);
 		}, 250);
 
+		// Send audio from openAI to plivo
 		client.realtime.on('server.response.audio.delta', (response) => {
-			// console.log('Sending audio delta to Twilio:', response);
-			// this keeps sending even when cancelled?
 			const audioDelta = {
 				event: 'playAudio',
 				media: {
 					contentType: "audio/x-mulaw",
 					sampleRate: "8000",
 					// a base64 encoded string of 8000/mulaw
-					payload: Buffer.from(response.delta, 'base64').toString('base64')
+					payload: response.delta
 				}
 			};
-
-			// console.log('Sending audio delta to Twilio:', audioDelta);
 			plivoWs.send(JSON.stringify(audioDelta));
 		});
 
@@ -180,29 +181,30 @@ fastify.register(async (fastify) => {
 					case 'media':
 						if (client.realtime.isConnected()) {
 							// Log data.media without payload
-							const mediaWithoutPayload = { ...data.media };
-							delete mediaWithoutPayload.payload;
-							console.log('Send to Plivo:', mediaWithoutPayload);
+							// const mediaWithoutPayload = { ...data.media };
+							// delete mediaWithoutPayload.payload;
+							// console.log('Send to Plivo:', mediaWithoutPayload);
 							
-							// Collect audio payloads
-							if (!audioBuffer) {
-								audioBuffer = [];
-								audioBufferStartTime = Date.now();
-							}
+							// // Collect audio payloads
+							// if (!audioBuffer) {
+							// 	audioBuffer = [];
+							// 	audioBufferStartTime = Date.now();
+							// }
 							
-							audioBuffer.push(data.media.payload);
+							// audioBuffer.push(data.media.payload);
 							
-							// Check if we have collected 1 second worth of audio
-							if (Date.now() - audioBufferStartTime >= 1000) {
-								const combinedAudio = audioBuffer.join('');
-								client.realtime.send('input_audio_buffer.append', {
-									audio: combinedAudio,
-								});
+							// // Check if we have collected 1 second worth of audio
+							// if (Date.now() - audioBufferStartTime >= 1000) {
+							// 	const combinedAudio = audioBuffer.join('');
+								client.appendInputAudio(data.media.payload);
+								// client.realtime.send('input_audio_buffer.append', {
+								// 	audio: combinedAudio,
+								// });
 								
 								// Reset buffer and start time
-								audioBuffer = [];
-								audioBufferStartTime = Date.now();
-							}
+								// audioBuffer = [];
+								// audioBufferStartTime = Date.now();
+							// }
 						}
 						break;
 					case 'start':
