@@ -1,3 +1,5 @@
+import twilioClient from './src/twilioClient.js';
+
 const definition = {
 	name: 'get_weather',
 	description:
@@ -74,7 +76,7 @@ export { get_weather };
 /**
  * @param {import('@openai/realtime-api-beta').RealtimeClient} client
  */
-function addTools(client) {
+function addTools(client, callSid) {
 
 
 	/**
@@ -227,6 +229,27 @@ function addTools(client) {
 			}
 		}
 	);
+
+
+	client.addTool(
+		{
+			name: 'hangup',
+			description: 'Do not call this function without saying goodbye first',
+		},
+		async () => {
+			twilioClient.calls(callSid)
+				.update({ status: 'completed' })
+				.then(call => {
+					console.log(`Call ${call.sid} has been terminated.`)
+					client.disconnect();
+				})
+				.catch(err => {
+					console.error(err);
+					client.disconnect();
+				});
+		}
+	)
+
 
 }
 

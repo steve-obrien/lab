@@ -16,30 +16,44 @@
 		<div class="w-full h-full p-2 bg-gray-200 " id="app">
 			<div class="flex h-full shadow-lg bg-white border rounded">
 				<div class="w-full overflow-x-scroll flex flex-col">
-					<h1 class="text-xl font-light text-black border-b p-4">AI Call Interface</h1>
-					<call-logs class="p-4 h-full"></call-logs>
+					<h1 class="text-xl font-light text-black border-b p-4">AI Call Interface - {{uuid}}</h1>
+					<call-logs :uuid="uuid" class="p-4 h-full"></call-logs>
 				</div>
-				<div class="w-96 p-6 border-l">
+				<div class="w-96 border-l">
 
 					<form @submit.prevent="makeCall" id="callForm" class="flex flex-col rounded-lg">
-						<p class="font-medium text-black mb-2">Instructions</p>
-						<select v-model="selectedFile" @change="loadInstructions" id="instructionFiles" class="w-full p-2 border border-gray-200 rounded mb-2 bg-gray-100 text-black">
-							<option value="new">New...</option>
-							<option v-for="file in instructionFiles" :key="file" :value="file">{{ file.name }}</option>
-						</select>
-						<textarea v-model="instructions" id="instructions" rows="5" placeholder="AI instructions" class="block w-full rounded-md border-0 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-1 focus:ring-inset focus:ring-indigo-600 p-2 mb-2"></textarea>
-						<select v-model="voice" class="w-full p-2 border border-gray-200 rounded mb-2 bg-gray-100 text-black">
-							<option v-for="voice in voices" :key="voice" :value="voice">{{ voice }}</option>
-						</select>
-						<input type="range" v-model="silence" min="0" max="2000" class="w-full mb-2">
-						<span>{{ silence }} ms</span>
-						<button type="button" @click="saveInstructions" id="saveButton" class="bg-gray-500 text-white px-4 py-2 rounded-lg ml-auto">Save</button>
-
-						<p class="font-medium text-black mt-4 mb-2">Make a call</p>
-						<input v-model="phoneNumber" type="text" id="phoneNumber" placeholder="Enter phone number" required class="w-full p-2 border border-gray-200 rounded mb-3 bg-gray-100 text-black">
-						<button type="submit" class="bg-gray-500 text-white px-4 py-2 rounded-lg">Make Call</button>
+						<div class="p-4 border-b">
+							<p class="font-medium text-black mb-2">AI Instructions</p>
+							<select v-model="selectedFile" @change="loadInstructions" id="instructionFiles" class="w-full p-2 border border-gray-200 rounded mb-2 bg-gray-100 text-black">
+								<option value="new">New...</option>
+								<option v-for="file in instructionFiles" :key="file" :value="file">{{ file.name }}</option>
+							</select>
+							<textarea v-model="instructions" id="instructions" rows="5" placeholder="AI instructions" class="block w-full rounded-md border-0 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-1 focus:ring-inset focus:ring-indigo-600 p-2 mb-2"></textarea>
+							<button type="button" @click="saveInstructions" id="saveButton" class="bg-gray-500 text-white px-4 py-2 rounded-lg ml-auto ">Save</button>
+						</div>
+						<div class="p-4 border-b">
+							<p class="font-medium text-black mb-2">Voice</p>
+							<select v-model="voice" class="w-full p-2 border border-gray-200 rounded mb-2 bg-gray-100 text-black">
+								<option v-for="voice in voices" :key="voice" :value="voice">{{ voice }}</option>
+							</select>
+						</div>
+							<div class="p-4 border-b">
+							<p class="font-medium text-black mb-2">Turn Detection</p>
+							<div class="font-normal text-sm text-black mb-0 flex w-full justify-between"><div>Silence duration</div> <div><input v-model="silence" class="inline-block w-10 text-right pr-1 " >ms</div></div>
+							<input type="range" v-model="silence" min="0" max="2000" class="w-full mb-2">
+							
+						</div>
+						<div class="p-4 border-b">
+							<p class="font-medium text-black mb-2">Make a call</p>
+							<input v-model="phoneNumber" type="text" id="phoneNumber" placeholder="Enter phone number" required class="w-full p-2 border border-gray-200 rounded mb-3 bg-gray-100 text-black">
+							<button type="submit" class="bg-gray-500 text-white px-4 py-2 rounded-lg">Make Call</button>
+						</div>
+						{{callSsid}}
+						<br>
 
 					</form>
+
+					<button @click="sendButts()">Test</button>
 				</div>
 			</div>
 		</div>
@@ -52,12 +66,12 @@
 						<div v-if="!items.length">awaiting connection...</div>
 						<div v-for="(cnvItem, i) in items" :key="cnvItem.id" class="flex mt-8">
 							<div class="w-24 leading-5 mb-4 flex-shrink-0 sm:mb-0 sm:mr-4 text-gray-400 text-xs ">
-								00:00 {{ cnvItem.status }} {{ cnvItem.elapsedTime }} {{ toTime(cnvItem.startTime) }}
+								{{ toTime(cnvItem.startTime) }}
 							</div>
 							<div class="flex flex-col gap-1 group w-full">
 								<div class="flex" :class="cnvItem.role == 'user' ? 'text-green-700' : 'text-black'">
 									<div class="uppercase font-bold leading-5">
-										{{ (cnvItem.role || cnvItem.type).replaceAll('_', ' ') }}
+										{{ (cnvItem.role || cnvItem.type).replaceAll('_', ' ') }} 
 									</div>
 								</div>
 								<div class="speaker-content w-full">
@@ -70,16 +84,16 @@
 										<pre class="rounded w-full text-sm"><code class="json rounded-lg">{{ formatJson(cnvItem.formatted.output) }}</code></pre>
 									</div>
 									<div v-if="!cnvItem.formatted.tool && cnvItem.role === 'user'" class="text-light">
-										{{ cnvItem.formatted.transcript || (cnvItem.formatted.audio?.length ? '(awaiting transcript)' : cnvItem.formatted.text || '(item sent)')  }}
+										{{ cnvItem.formatted.transcript || (cnvItem.formatted.audio?.length ? '(awaiting transcript)' : cnvItem.formatted.text || '(item sent)')  }} <br>
+										<button class="rounded-lg bg-gray-400 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-500 active:bg-gray-600 focus:ring-gray-300 focus:ring" @click="playFormatted(cnvItem.id)">&#9658;</button>
 									</div>
 									<div v-if="!cnvItem.formatted.tool && cnvItem.role === 'assistant'" class="text-light">
 										{{ cnvItem.formatted.transcript || cnvItem.formatted.text || '(truncated)' }}
+										
+										{{ cnvItem.content[0].transcript }}<br>
+										<button class="rounded-lg bg-gray-400 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-500 active:bg-gray-600 focus:ring-gray-300 focus:ring" @click="playFormatted(cnvItem.id)">&#9658;</button>
+										
 									</div>
-									<div v-if="cnvItem.formatted.file">
-										<audio :src="cnvItem.formatted.file.url" controls />
-									</div>
-									<button @click="play(cnvItem.id)">play</button>
-									<button @click="playFormatted(cnvItem.id)">play full</button>
 								</div>
 							</div>
 						</div>
@@ -92,43 +106,56 @@
 
 			const { createApp, ref, onMounted } = Vue;
 
-			const CallItem = {}
+			const socket = null
+			window.socket = socket
 
 			const CallLogs = {
 				template: '#call-log',
+				props: {
+					uuid: null
+				},
 				data() {
 					return {
-						items: []
+						items: [],
+						socket: null,
 					};
 				},
 				methods: {
+					test() {
+						console.log(this.parent)
+						alert(this.parent.uuid)
+					},
 					connectWebSocket() {
 
 						const host = window.location.host;
-						const socket = new WebSocket(`ws://${host}/log-stream`);
+						const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+						window.socket = new WebSocket(`${protocol}://${host}/log-stream?uuid=${this.uuid}`);
 
-						socket.onmessage = (event) => {
-							const item = JSON.parse(event.data);
-							const index = this.items.findIndex(existingItem => existingItem.id === item.id);
-							if (index !== -1) {
-								this.items.splice(index, 1, item);
-							} else {
-								this.items.push(item);
-							}
+						window.socket.onmessage = (event) => {
+							console.log(event);
+							const data = JSON.parse(event.data);
+							const items = Array.isArray(data) ? data : [data]; // Ensure data is an array
+							items.forEach(item => {
+								const index = this.items.findIndex(existingItem => existingItem.id === item.id);
+								if (index !== -1) {
+									this.items.splice(index, 1, item);
+								} else {
+									this.items.push(item);
+								}
+							});
 						};
 
-						socket.onerror = (error) => {
+						window.socket.onerror = (error) => {
 							console.error('WebSocket Error: ', error);
 						};
 
-						socket.onopen = () => {
+						window.socket.onopen = () => {
 							console.log('WebSocket connection opened');
-							socket.send('ping');
 						};
 
-						socket.onclose = () => {
-							console.log('WebSocket connection closed. Reconnecting in 5 seconds...');
-							setTimeout(this.connectWebSocket, 5000);
+						window.socket.onclose = () => {
+							console.log('WebSocket connection closed. Reconnecting in 3 seconds...');
+							setTimeout(this.connectWebSocket, 3000);
 						};
 
 					},
@@ -164,16 +191,6 @@
 
 						return (sign !== 0 ? (BIAS - sample) : (sample - BIAS));
 					},
-					ulawToFloat32(uint8Array) {
-						const float32Array = new Float32Array(uint8Array.length);
-						for (let i = 0; i < uint8Array.length; i++) {
-							// Decode µ-law to Int16
-							const decodedInt16 = this.ulawDecodeSample(uint8Array[i]);
-							// Convert Int16 to Float32 in the range of -1.0 to 1.0
-							float32Array[i] = decodedInt16 / 32768;
-						}
-						return float32Array;
-					},
 					convertToFloat32(int16Array) {
 						const float32Array = new Float32Array(int16Array.length);
 						for (let i = 0; i < int16Array.length; i++) {
@@ -182,20 +199,6 @@
 							float32Array[i] = decodedInt16 / 32768;
 						}
 						return float32Array;
-					},
-					play(id) {
-						const item = this.items.find(item => item.id === id);
-						const audioArray = Object.values(item.playedAudio);
-						const float32Audio = this.ulawToFloat32(audioArray)
-						const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-						const audioBuffer = audioContext.createBuffer(1, float32Audio.length, 8000);
-						// Step 4: Copy the PCM data to the buffer
-						audioBuffer.getChannelData(0).set(float32Audio);
-						// Step 5: Create an AudioBufferSourceNode and play the buffer
-						const source = audioContext.createBufferSource();
-						source.buffer = audioBuffer;
-						source.connect(audioContext.destination); // Connect to speakers
-						source.start();
 					},
 					playFormatted(id) {
 						const item = this.items.find(item => item.id === id);
@@ -215,6 +218,10 @@
 				mounted() {
 					this.connectWebSocket();
 					window.logs = this;
+				},
+				updated() {
+					// Call highlight.js after the DOM updates
+					hljs.highlightAll();
 				}
 			};
 
@@ -230,10 +237,16 @@
 						voices: ['alloy', 'echo', 'shimmer'],
 						voice: 'shimmer',
 						silence: 1000,
-						phoneNumber: '447969088447'
+						phoneNumber: '447969088447',
+						// create a unique ID for the user.
+						uuid: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+						callSsid: '',
 					};
 				},
 				methods: {
+					sendButts() {
+						window.socket.send('Butts');
+					},
 					async fetchInstructionFiles() {
 						const response = await fetch('/instructions');
 						this.instructionFiles = await response.json();
@@ -279,6 +292,11 @@
 							});
 
 							const result = await response.json();
+							this.callSsid = result.callSid
+
+							// send a message 
+							window.socket.send(JSON.stringify({event: 'onCall', data: {'callSid': this.callSid}}))
+
 							//alert(result.message || 'Call initiated');
 						} catch (error) {
 							alert('Failed to initiate call');
@@ -289,7 +307,8 @@
 					this.fetchInstructionFiles();
 				}
 			}
-			createApp(App).mount('#app');
+			const app = createApp(App)
+			window.app = app.mount('#app');
 
 
 			// import items from './items.js'
