@@ -34,7 +34,7 @@ export class RealtimeConversation {
 			newItem.formatted.transcript = '';
 			// If we have a speech item, can populate audio
 			if (this.queuedSpeechItems[newItem.id]) {
-				console.log('!!!! queuedSpeechItems',  this.queuedSpeechItems[newItem.id])
+				//console.log('!!!! queuedSpeechItems',  this.queuedSpeechItems[newItem.id])
 				newItem.formatted.audio = Array.from(this.queuedSpeechItems[newItem.id].audio);
 				delete this.queuedSpeechItems[newItem.id]; // free up some memory
 			}
@@ -140,10 +140,11 @@ export class RealtimeConversation {
 				const endIndex = Math.floor(
 					(speech.audio_end_ms * this.defaultFrequency) / 1000,
 				);
-				console.log('!!!!!! inputAudioBuffer BEFORE SLICE', inputAudioBuffer);
-				console.log('!!!!!! inputAudioBuffer SLICED ', inputAudioBuffer.slice(startIndex, endIndex), startIndex, endIndex, inputAudioBuffer.length);
+				// console.log('!!!!!! inputAudioBuffer BEFORE SLICE', inputAudioBuffer);
+				// console.log('!!!!!! inputAudioBuffer SLICED ', inputAudioBuffer.slice(startIndex, endIndex), startIndex, endIndex, inputAudioBuffer.length);
+				console.log('inputAudioBuffer.length', inputAudioBuffer.length);
 				speech.audio = inputAudioBuffer.slice(startIndex, endIndex);
-				console.log('!!!!!! speech.audio', speech.audio);
+				//console.log('!!!!!! speech.audio', speech.audio);
 			}
 			return { item: null, delta: null };
 		},

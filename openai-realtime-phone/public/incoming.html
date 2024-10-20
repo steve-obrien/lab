@@ -17,27 +17,10 @@
 			<div class="flex h-full shadow-lg bg-white border rounded">
 				<div class="w-full overflow-x-scroll flex flex-col">
 					<h1 class="text-xl font-light text-black border-b p-4">AI Call Interface - {{uuid}}</h1>
-					<div>
-						<h2>Active Calls</h2>
-						<ul>
-							<li v-for="call in callState.calls.values()" :key="call.CallSid">
-								<p>CallSid: {{ call.CallSid }}</p>
-								<p>Call to: {{ call.Called }}</p>
-								<p>Status: {{ call.CallStatus }}</p>
-								<div v-if="!['completed', 'canceled'].includes(call.CallStatus)">
-									<button class="bg-gray-500 text-white px-4 py-2 rounded-lg ml-auto " @click="hangupCall(call.CallSid)">Hang Up</button>
-								</div>
-								<div v-else>
-									<p>Recording: {{ call.RecordingUrl }}</p>
-									<audio v-if="call.RecordingUrl" :src="call.RecordingUrl" controls :key="call.RecordingUrl"></audio>
-								</div>
-							
-							</li>
-						</ul>
-					</div>
-					<call-logs :uuid="uuid" class="p-4 h-full w-1/2"></call-logs>
+					<call-logs :uuid="uuid" class="p-4 h-full"></call-logs>
 				</div>
 				<div class="w-96 border-l">
+
 					<form @submit.prevent="makeCall" id="callForm" class="flex flex-col rounded-lg">
 						<div class="p-4 border-b">
 							<p class="font-medium text-black mb-2">AI Instructions</p>
@@ -54,14 +37,11 @@
 								<option v-for="voice in voices" :key="voice" :value="voice">{{ voice }}</option>
 							</select>
 						</div>
-						<div class="p-4 border-b">
+							<div class="p-4 border-b">
 							<p class="font-medium text-black mb-2">Turn Detection</p>
-							<div class="font-normal text-sm text-black mb-0 flex w-full justify-between">
-								<div>Silence duration</div>
-								<div><input v-model="silence" class="inline-block w-10 text-right pr-1 ">ms</div>
-							</div>
+							<div class="font-normal text-sm text-black mb-0 flex w-full justify-between"><div>Silence duration</div> <div><input v-model="silence" class="inline-block w-10 text-right pr-1 " >ms</div></div>
 							<input type="range" v-model="silence" min="0" max="2000" class="w-full mb-2">
-
+							
 						</div>
 						<div class="p-4 border-b">
 							<p class="font-medium text-black mb-2">Make a call</p>
@@ -72,6 +52,7 @@
 						<br>
 
 					</form>
+
 					<button @click="sendButts()">Test</button>
 				</div>
 			</div>
@@ -90,7 +71,7 @@
 							<div class="flex flex-col gap-1 group w-full">
 								<div class="flex" :class="cnvItem.role == 'user' ? 'text-green-700' : 'text-black'">
 									<div class="uppercase font-bold leading-5">
-										{{ (cnvItem.role || cnvItem.type).replaceAll('_', ' ') }}
+										{{ (cnvItem.role || cnvItem.type).replaceAll('_', ' ') }} 
 									</div>
 								</div>
 								<div class="speaker-content w-full">
@@ -107,8 +88,11 @@
 										<button class="rounded-lg bg-gray-400 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-500 active:bg-gray-600 focus:ring-gray-300 focus:ring" @click="playFormatted(cnvItem.id)">&#9658;</button>
 									</div>
 									<div v-if="!cnvItem.formatted.tool && cnvItem.role === 'assistant'" class="text-light">
-										{{ cnvItem.formatted.transcript || cnvItem.formatted.text ||  cnvItem.content[0].transcript + ' (truncated)'  }}
+										{{ cnvItem.formatted.transcript || cnvItem.formatted.text || '(truncated)' }}
+										
+										{{ cnvItem.content[0].transcript }}<br>
 										<button class="rounded-lg bg-gray-400 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-500 active:bg-gray-600 focus:ring-gray-300 focus:ring" @click="playFormatted(cnvItem.id)">&#9658;</button>
+										
 									</div>
 								</div>
 							</div>
@@ -118,23 +102,9 @@
 			</div>
 		</template>
 
-
-
 		<script type="module">
 
-			const { createApp, ref, onMounted, reactive } = Vue;
-
-			const callState = reactive({
-				calls: new Map(),
-				addOrUpdateCall(callData) {
-					// Update or add the call using CallSid as the key
-					this.calls.set(callData.CallSid, { ...this.calls.get(callData.CallSid), ...callData });
-				},
-				removeCall(callSid) {
-					// Remove the call using CallSid as the key
-					this.calls.delete(callSid);
-				}
-			});
+			const { createApp, ref, onMounted } = Vue;
 
 			const socket = null
 			window.socket = socket
@@ -161,23 +131,18 @@
 						const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
 						window.socket = new WebSocket(`${protocol}://${host}/log-stream?uuid=${this.uuid}`);
 
-						window.socket.onmessage = (message) => {
-							const { event, data } = JSON.parse(message.data);
-							console.log(event, data, 'parsed')
-							if (event === 'items') {
-								const items = Array.isArray(data) ? data : [data]; // Ensure data is an array
-								items.forEach(item => {
-									const index = this.items.findIndex(existingItem => existingItem.id === item.id);
-									if (index !== -1) {
-										this.items.splice(index, 1, item);
-									} else {
-										this.items.push(item);
-									}
-								});
-							}
-							if (event === 'status') {
-								callState.addOrUpdateCall(data)
-							}
+						window.socket.onmessage = (event) => {
+							console.log(event);
+							const data = JSON.parse(event.data);
+							const items = Array.isArray(data) ? data : [data]; // Ensure data is an array
+							items.forEach(item => {
+								const index = this.items.findIndex(existingItem => existingItem.id === item.id);
+								if (index !== -1) {
+									this.items.splice(index, 1, item);
+								} else {
+									this.items.push(item);
+								}
+							});
 						};
 
 						window.socket.onerror = (error) => {
@@ -276,15 +241,11 @@
 						// create a unique ID for the user.
 						uuid: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
 						callSsid: '',
-						callState,
 					};
 				},
 				methods: {
 					sendButts() {
 						window.socket.send('Butts');
-					},
-					hangupCall(callSid) {
-						window.socket.send(JSON.stringify({ event: 'hangup', data: { callSid } }))
 					},
 					async fetchInstructionFiles() {
 						const response = await fetch('/instructions');
@@ -334,7 +295,7 @@
 							this.callSsid = result.callSid
 
 							// send a message 
-							window.socket.send(JSON.stringify({ event: 'onCall', data: { 'callSid': this.callSid } }))
+							window.socket.send(JSON.stringify({event: 'onCall', data: {'callSid': this.callSid}}))
 
 							//alert(result.message || 'Call initiated');
 						} catch (error) {

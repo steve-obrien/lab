@@ -327,7 +327,7 @@ export class RealtimeClient extends RealtimeEventHandler {
 		});
 		this.realtime.on('server.input_audio_buffer.speech_stopped', (event) => {
 			console.log('speech_stopped', Date.now(), event)
-			console.log('this.inputAudioBuffer', this.inputAudioBuffer)
+			//console.log('this.inputAudioBuffer', this.inputAudioBuffer)
 			handler(event, this.inputAudioBuffer);
 		});
 

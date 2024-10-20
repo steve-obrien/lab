@@ -2,21 +2,20 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Import third-party libraries
+// Load third party modules
 import Fastify from 'fastify';
 import fastifyFormBody from '@fastify/formbody';
 import fastifyWs from '@fastify/websocket';
 import fastifyStatic from '@fastify/static';
 import path from 'path';
 
-// Import custom modules
-import { RealtimeClient } from './src/ai/index.js';
+// Load internal modules
+import { RealtimeClient } from './src/realtime/index.js';
 import registerInstructionsRoutes from './instructions.js';
 import { addTools } from './tools.js';
 import AiAudioBufferTracker from './src/AiAudioBufferTracker.js';
+import PlivoController from './src/controllers/PlivoController.js';
 import aiConfig from './src/aiConfig.js';
-import IndexController from './src/controllers/IndexController.js';
-import webLog from './src/WebSocketManager.js';
 
 // Retrieve the OpenAI API key from environment variables. You must have OpenAI Realtime API access.
 const { OPENAI_API_KEY } = process.env;
@@ -24,7 +23,9 @@ if (!OPENAI_API_KEY) {
 	console.error('Missing OpenAI API key. Please set it in the .env file.');
 	process.exit(1);
 }
+
 const PORT = process.env.PORT || 5050; // Allow dynamic port assignment
+
 
 // Initialize Fastify
 const fastify = Fastify();
@@ -46,21 +47,22 @@ fastify.register(fastifyStatic, {
 registerInstructionsRoutes(fastify);
 
 // Route to handle outbound call requests
-fastify.post('/make-call', IndexController.makeCall);
+fastify.post('/make-call', PlivoController.makeCall);
 
 // TwiML for outbound call
-fastify.all('/outbound-call', IndexController.outboundCall);
+fastify.all('/outbound-call', PlivoController.outboundCall);
+fastify.all('/callbacks', PlivoController.callbacks);
 
 // WebSocket route for media-stream
 fastify.register(async (fastify) => {
-	fastify.get('/media-stream', { websocket: true }, async (twilioWs, req) => {
-		console.log('Tel: Stream Created', req.query);
+	fastify.get('/media-stream', { websocket: true }, async (plivoWs, req) => {
+		console.log('Tel: Stream Created');
 
-		const conversation = new AiTelConversation(aiConfig, twilioWs)
+		const conversation = new AiTelConversation(aiConfig, plivoWs)
 
 		let callStart = 0
 		let callStop = 0
-		twilioWs.on('message', (message) => {
+		plivoWs.on('message', (message) => {
 			try {
 				const data = JSON.parse(message);
 				switch (data.event) {
@@ -75,12 +77,12 @@ fastify.register(async (fastify) => {
 						conversation.telStream(data.media.payload);
 						break;
 					case 'dtmf':
-						conversation.telDtmf(data.dtmf.digit);
 						console.log('Tel: dtmf:', data.dtmf.digit);
 						break;
 					case 'stop':
-						conversation.telStop();
+						callStop = Date.now()
 						console.log('Tel: Stop: ', data.event);
+						console.log('call duration: ', callStop - callStart)
 						break;
 					default:
 						console.log('Tel: non-media event:', data.event);
@@ -92,20 +94,21 @@ fastify.register(async (fastify) => {
 		});
 
 		// Handle connection close
-		twilioWs.on('close', () => {
+		plivoWs.on('close', () => {
 			console.log('Client disconnected.');
 			conversation.ai.disconnect();
 		});
 
 	});
 });
+
+
 /**
  * When creating a new conversation we need to orchestrate via the telephone stream.
  * 
  * We should see the following in the logs: 
  * Tel: connected
  * Tel: started
- * Tel: stream - recieves an audio stream from twilio
  */
 class AiTelConversation {
 
@@ -128,7 +131,6 @@ class AiTelConversation {
 		console.log('Tel: started', callSid, streamSid);
 		this.callSid = callSid
 		this.streamSid = streamSid
-
 		this.aiStream();
 	}
 
@@ -137,15 +139,6 @@ class AiTelConversation {
 			return;
 
 		this.ai.appendInputAudioBase64(payload);
-	}
-
-	telDtmf(digit) {
-		console.log('Tel: dtmf:', digit);
-		// The AI will not hear the dtmf digit signal - so we add as a user message
-		this.ai.sendUserMessageContent([{
-			type: `input_text`, 
-			text: `${digit}`
-		}]);
 	}
 
 	aiStream() {
@@ -176,15 +169,16 @@ class AiTelConversation {
 			}
 			if (item.status === 'completed' && item.formatted.audio?.length) {
 				// send the audio to the browser.
+				//webLog.send(item)
 			}
 
-			webLog.sendItems(items)
+			webLog.send(items)
 		})
 
 		// created is called after user speech has finished.
 		this.ai.realtime.on('server.conversation.item.created', (event) => {
 			let item = this.ai.conversation.getItem(event.item.id);
-			webLog.sendItems(item)
+			webLog.send(item)
 		})
 
 		// errors like connection failures
@@ -198,7 +192,7 @@ class AiTelConversation {
 		const item = this.ai.conversation.getItem(itemId);
 		await this.ai.cancelResponse(itemId, sample);
 		this.twilioWs.send(JSON.stringify({ event: 'clear', streamSid: this.streamSid }));
-		webLog.sendItems(item)
+		webLog.send(item)
 	}
 
 	/**
@@ -207,9 +201,12 @@ class AiTelConversation {
 	 */
 	sendAudio(audio) {
 		const audioDelta = {
-			event: 'media',
-			streamSid: this.streamSid,
-			media: { payload: audio }
+			event: 'playAudio',
+			media: {
+				contentType: "audio/x-mulaw",
+				sampleRate: 8000,
+				payload: audio
+			}
 		};
 		this.twilioWs.send(JSON.stringify(audioDelta));
 	}
@@ -235,15 +232,49 @@ class AiTelConversation {
 		addTools(this.ai, this.callSid);
 	}
 
-	/**
-	 * When the telephone connection is broken
-	 */
-	telStop() {
-		this.ai.disconnect();
+}
+
+class WebLogManager {
+
+	constructor() {
+		this.sockets = new Set();
+	}
+
+	addSocket(ws) {
+
+		this.sockets.add(ws);
+
+		ws.on('message', (message) => {
+			try {
+				message = JSON.parse(message);
+			} catch (error) {
+				console.error('log socket json parse error')
+			}
+			if (message.event === 'onCall') {
+				ws.callSid = message.data.callSid
+				console.log('WebLogManager: onCall')
+			}
+		});
+		ws.on('error', (event) => {
+			console.error('LogWs: Error:', event);
+		});
+		ws.on('close', (event) => {
+			console.error('LogWs: close', event);
+			this.sockets.delete(ws)
+		});
+
+		console.log('sockets connected: ', this.sockets.size)
+	}
+
+	send(message) {
+		this.sockets.forEach(client => {
+			client.send(JSON.stringify(message));
+		});
 	}
 
 }
 
+const webLog = new WebLogManager();
 
 
 let i = 1;
@@ -257,11 +288,22 @@ fastify.register(async (fastify) => {
 
 
 // TwiML for outbound call
-fastify.all('/status-callback', IndexController.statusCallback);
+fastify.all('/twilio-status-callback', async (request, reply) => {
+	console.log('Recording complete', request.body.RecordingUrl);
+	reply.sendStatus(200);
+});
 
 
-// Route for Twilio to handle inbound calls (should probably call it inbound-call)
-fastify.all('/inbound-call', IndexController.inboundCall);
+// Route for Twilio to handle incoming calls
+fastify.all('/incoming-call', async (request, reply) => {
+	const twimlResponse = `<?xml version="1.0" encoding="UTF-8"?>
+						<Response>
+					<Play>https://s3.amazonaws.com/plivocloud/Trumpet.mp3</Play>
+					<Stream bidirectional="true" keepCallAlive="true" >wss://${request.headers.host}/media-stream</Stream>
+				</Response>`;
+
+	reply.type('text/xml').send(twimlResponse);
+});
 
 
 fastify.listen({ port: PORT }, (err) => {
