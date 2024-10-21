@@ -17,18 +17,18 @@
 			<div class="flex h-full shadow-lg bg-white border rounded">
 				<div class="w-full overflow-x-scroll flex flex-col">
 					<h1 class="text-xl font-light text-black border-b p-4">AI Call Interface - {{uuid}}</h1>
-					<div>
+					<div class="p-4">
 						<h2>Active Calls</h2>
 						<ul>
 							<li v-for="call in callState.calls.values()" :key="call.CallSid">
-								<p>CallSid: {{ call.CallSid }}</p>
+								<!-- <p>CallSid: {{ call.CallSid }}</p> -->
 								<p>Call to: {{ call.Called }}</p>
-								<p>Status: {{ call.CallStatus }}</p>
+								<p >Status: {{ call.CallStatus }}</p>
 								<div v-if="!['completed', 'canceled'].includes(call.CallStatus)">
 									<button class="bg-gray-500 text-white px-4 py-2 rounded-lg ml-auto " @click="hangupCall(call.CallSid)">Hang Up</button>
 								</div>
 								<div v-else>
-									<p>Recording: {{ call.RecordingUrl }}</p>
+									<!-- <p>Recording: {{ call.RecordingUrl }}</p> -->
 									<audio v-if="call.RecordingUrl" :src="call.RecordingUrl" controls :key="call.RecordingUrl"></audio>
 								</div>
 							

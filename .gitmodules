@@ -1,0 +1,3 @@
+[submodule "vscode-ai"]
+	path = vscode-ai
+	url = https://github.com/steve-obrien/vscode-ai
