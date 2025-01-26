@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+	/* --color-mint-500: oklch(0.72 0.11 178); */
+}
+
+/* .btn { @apply rounded-sm inline-flex items-center justify-center px-5 py-2.5 font-semibold text-center no-underline appearance-none;} */
+/* .btn[disabled] {@apply opacity-75;} */
+/* .btn:focus { outline: none; }
+.btn-primary { @apply bg-white text-black; }
+.btn-primary:visited { @apply text-black; }
+.btn-primary:focus { outline: none; }
+
+/* .btn-glass { @apply border-gray-50 text-white btn btn-xl hover:text-black bg-white/30  backdrop-blur-sm focus:bg-white/40 hover:bg-white/40; } */
+
+/* .btn { @apply transition shadow transform duration-150 hover:shadow-lg focus:shadow-lg active:shadow-inner-md }
+.btn:focus, .btn:hover { @apply shadow-lg; }
+.btn:active { @apply shadow-inner-md; }
+
+.btn-fx { @apply transition shadow transform duration-150 hover:shadow-lg focus:shadow-lg active:shadow-inner-md } */ */

@@ -162,6 +162,7 @@ class AiTelConversation {
 			await this.interruptItem(trackId, sample);
 		});
 
+
 		this.ai.on('conversation.updated', ({ item, delta }) => {
 			const items = this.ai.conversation.getItems();
 
