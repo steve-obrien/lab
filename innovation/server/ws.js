@@ -15,21 +15,37 @@ const clients = new Map();
 wsServer.on('connection', (ws, req) => {
 
 	// Parse the query parameters from the request URL
-	const parameters = url.parse(req.url, true).query;
-	const code = parameters.code;
-	const username = parameters.username;
-	// Generate a unique ID for the client
-	const clientId = generateUniqueId();
-	ws.clientId = clientId; // Assign the ID to the WebSocket instance
-	ws.username = username; // Assign the username to the WebSocket instance
 
-	// Add the new client to the list
-	clients.set(clientId, ws);
+	const parameters = url.parse(req.url, true).query;
+	ws.username = parameters.username;
+
+	// The websocket and the browser need to negotiate a unique id 
+	// to identify the client. For now we just accept the browserId
+	ws.browserId = parameters.browserId;
+	ws.code = parameters.code;
+
+	// Check if a client with the same browserId already exists
+	// This could be a user rejoining.
+	let existingClient = null;
+	clients.forEach((client) => {
+		if (client.browserId === ws.browserId) {
+			existingClient = client;
+		}
+	});
+
+	if (existingClient) {
+		// Update the existing client connection
+		existingClient.terminate(); // Terminate the old connection
+		clients.delete(existingClient.browserId); // Remove the old client from the map
+	}
+
+	// Add the new client to the list	
+	clients.set(ws.browserId, ws);
 
 	// Broadcast the updated client list to all connected clients
 	broadcastClientList();
 
-	console.log(`Client connected with ID: ${clientId} and code: ${code}`);
+	console.log(`Client connected with ID: ${ws.browserId} and code: ${ws.code}`);
 
 	// Verify the code (replace this with your actual verification logic)
 	// if (!isValidCode(code)) {
@@ -58,7 +74,7 @@ wsServer.on('connection', (ws, req) => {
 	});
 
 	ws.on('close', () => {
-		clients.delete(clientId);
+		clients.delete(ws.browserId);
 		broadcastClientList();
 		console.log('Client disconnected');
 	});
@@ -71,9 +87,10 @@ wsServer.on('connection', (ws, req) => {
 function updateCursor(x, y, senderWs) {
 	const cursorData = JSON.stringify({ 
 		type: 'cursorUpdate', 
-		clientId: senderWs.clientId, 
+		browserId: senderWs.browserId, 
 		x: x, 
-		y: y 
+		y: y,
+		username: senderWs.username
 	});
 	console.log('updateCursor data:', cursorData);
 	clients.forEach((client) => {
@@ -85,7 +102,13 @@ function updateCursor(x, y, senderWs) {
 
 // Function to broadcast the list of client IDs to all clients
 function broadcastClientList() {
-	const clientList = Array.from(clients.keys());
+
+	// get each client ws object and convert to an object with browserId and username
+	const clientList = Array.from(clients.values()).map((client) => ({
+		browserId: client.browserId,
+		username: client.username
+	}));
+	
 	const message = JSON.stringify({ type: 'clientList', clients: clientList });
 	console.log('Broadcasting client list:', message);
 	clients.forEach((client) => {
