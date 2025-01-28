@@ -22,8 +22,8 @@
 				<p class="text-gray-700 mb-4">
 					Join on <a href="#" class="text-blue-500 underline">newicon.net/innovationapp</a> or scan the <strong>QR Code</strong>
 				</p>
-				Yor code:
-				<pre>{{ code }}</pre>
+				Your room:
+				<pre>{{ room }}</pre>
 				<canvas ref="qrcodeCanvas" class="h-24 w-24 mx-auto"></canvas>
 				<!-- <img src="qrcode.png" alt="QR Code" class="h-24 w-24 mx-auto"> -->
 			</div>
@@ -75,7 +75,7 @@ import { debounce } from 'lodash'
 
 export default {
 	props: {
-		code: String
+		room: String
 	},
 	data() {
 		return {
@@ -87,7 +87,7 @@ export default {
 	},
 	mounted() {
 		window.app = this;
-		this.generateQRCode(location + this.code);
+		this.generateQRCode(location + this.room);
 		this.trackCursorMovement();
 		this.setUpState();
 
@@ -131,7 +131,7 @@ export default {
 			this.getBrowserUuid();
 
 			// Include the code as a query parameter in the WebSocket URL
-			this.socket = new WebSocket(`ws://localhost:8080?code=${this.code}&username=${this.username}&browserId=${this.browserId}`);
+			this.socket = new WebSocket(`ws://localhost:8080?room=${this.room}&username=${this.username}&browserId=${this.browserId}`);
 
 			this.socket.onopen = () => {
 				console.log('WebSocket connection established');
