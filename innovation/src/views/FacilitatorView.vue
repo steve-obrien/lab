@@ -1,5 +1,5 @@
 <template>
-	<main>
+	<main v-if="this.workshopComponent === 'start'">
 		<div class="bg-white shadow-md rounded-lg p-8 max-w-4xl w-full">
 			<div class="flex justify-between items-start">
 				<div>
@@ -28,7 +28,7 @@
 				<!-- <img src="qrcode.png" alt="QR Code" class="h-24 w-24 mx-auto"> -->
 			</div>
 			<div class="flex justify-end mt-4">
-				<button class="bg-gray-300 cursor text-gray-700 px-4 py-2 rounded-lg">Start</button>
+				<button @click="startWorkshop()" class="bg-gray-300 cursor text-gray-700 px-4 py-2 rounded-lg">Start</button>
 			</div>
 
 		</div>
@@ -40,6 +40,12 @@
 			</div>
 		</div>
 	</main>
+	<div v-if="this.workshopComponent === 'ExploreProblems'">
+		<button @click="exploreProblemsStartTimer()">Start Timer</button>
+		<div>15:00</div>
+		<h1>Explore Problems</h1>
+
+	</div>
 
 	<div v-if="this.state === 'join' || this.state === 'joining'" class="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-s bg-opacity-50">
 		<div class="bg-white p-8 rounded-lg shadow-2xl">
@@ -82,7 +88,12 @@ export default {
 			state: 'start', // ['join', 'joining', 'joined', 'ready']
 			socket: null,
 			username: '',
-			clientsList: new Map()
+			clientsList: new Map(),
+			workshopComponent: 'start',
+			workshopState: {
+				timer: 15 * 60,
+				status: 'stopped'
+			}
 		}
 	},
 	mounted() {
@@ -228,6 +239,17 @@ export default {
 				client.y = data.y;
 			}
 		},
+		startWorkshop() {
+			this.workshopComponent = 'ExploreProblems';
+			this.socket.send(JSON.stringify({
+				type: 'ExploreProblems',
+				timer: {
+					minutes: 15,
+					status: 'stopped'
+				},
+				browserId: this.browserId
+			}));
+		}
 	},
 	onUnmounted() {
 		window.removeEventListener('mousemove', this.sendCursorPosition);

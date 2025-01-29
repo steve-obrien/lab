@@ -13,7 +13,7 @@ const createWorkshop = () => {
 	const randomCode = generateRandomCode();
 
 	console.log('Generated Code:', randomCode);
-	router.push({ path: '/workshop/'+randomCode })
+	router.push({ path: '/facilitator/'+randomCode })
 }
 
 </script>
