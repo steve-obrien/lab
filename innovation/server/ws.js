@@ -10,6 +10,7 @@ function generateUniqueId() {
 const wsServer = new WebSocketServer({ port: 8080 });
 
 // Create a list to store connected clients
+// @property {Map} ws - A map of connected clients, keyed by browserId
 const clients = new Map();
 
 wsServer.on('connection', (ws, req) => {
@@ -90,7 +91,8 @@ function updateCursor(x, y, senderWs) {
 		browserId: senderWs.browserId, 
 		x: x, 
 		y: y,
-		username: senderWs.username
+		// we should not have to send this now.
+		// username: senderWs.username
 	});
 	console.log('updateCursor data:', cursorData);
 	clients.forEach((client) => {
