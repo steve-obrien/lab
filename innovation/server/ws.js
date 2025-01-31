@@ -10,32 +10,35 @@ function generateUniqueId() {
 const wsServer = new WebSocketServer({ port: 8080 });
 
 // Create a list to store connected clients
-// @property {Map} ws - A map of connected clients, keyed by browserId
-const clients = new Map();
+// const clients = new Map();
+
+// each room id - has a clients map.
+const rooms = new Map();
+
 
 wsServer.on('connection', (ws, req) => {
 
 	// Parse the query parameters from the request URL
-
-	const parameters = url.parse(req.url, true).query;
-	ws.username = parameters.username;
-
 	// The websocket and the browser need to negotiate a unique id 
 	// to identify the client. For now we just accept the browserId
+	const parameters = url.parse(req.url, true).query;
+	ws.username = parameters.username;
 	ws.browserId = parameters.browserId;
-	ws.code = parameters.code;
+	ws.room = parameters.room;
+
+	// if the room does not exist, create it
+	if (!rooms.has(ws.room)) {
+		rooms.set(ws.room, new Map());
+	}
+
+	// add the client to the room
+	const clients = rooms.get(ws.room)
 
 	// Check if a client with the same browserId already exists
 	// This could be a user rejoining.
-	let existingClient = null;
-	clients.forEach((client) => {
-		if (client.browserId === ws.browserId) {
-			existingClient = client;
-		}
-	});
-
-	if (existingClient) {
+	if (clients.has(ws.browserId)) {
 		// Update the existing client connection
+		const existingClient = clients.get(ws.browserId);
 		existingClient.terminate(); // Terminate the old connection
 		clients.delete(existingClient.browserId); // Remove the old client from the map
 	}
@@ -44,15 +47,9 @@ wsServer.on('connection', (ws, req) => {
 	clients.set(ws.browserId, ws);
 
 	// Broadcast the updated client list to all connected clients
-	broadcastClientList();
+	broadcastClientList(ws.room);
 
-	console.log(`Client connected with ID: ${ws.browserId} and code: ${ws.code}`);
-
-	// Verify the code (replace this with your actual verification logic)
-	// if (!isValidCode(code)) {
-	// 	ws.close(1008, 'Invalid code'); // Close connection with policy violation code
-	// 	return;
-	// }
+	console.log(`Client connected with ID: ${ws.browserId} and code: ${ws.room}`);
 
 
 	ws.on('message', (message) => {
@@ -65,18 +62,11 @@ wsServer.on('connection', (ws, req) => {
 				break;
 		}
 
-
-		// Broadcast the message to all connected clients
-		wsServer.clients.forEach((client) => {
-			if (client !== ws && client.readyState === WebSocket.OPEN) {
-				client.send(message);
-			}
-		});
 	});
 
 	ws.on('close', () => {
 		clients.delete(ws.browserId);
-		broadcastClientList();
+		broadcastClientList(ws.room);
 		console.log('Client disconnected');
 	});
 
@@ -86,6 +76,9 @@ wsServer.on('connection', (ws, req) => {
 });
 
 function updateCursor(x, y, senderWs) {
+	const clients = rooms.get(senderWs.room);
+	console.log('room:',senderWs.room);
+	console.log('clients:', clients.size);
 	const cursorData = JSON.stringify({ 
 		type: 'cursorUpdate', 
 		browserId: senderWs.browserId, 
@@ -103,7 +96,8 @@ function updateCursor(x, y, senderWs) {
 }
 
 // Function to broadcast the list of client IDs to all clients
-function broadcastClientList() {
+function broadcastClientList(room) {
+	const clients = rooms.get(room);
 
 	// get each client ws object and convert to an object with browserId and username
 	const clientList = Array.from(clients.values()).map((client) => ({
