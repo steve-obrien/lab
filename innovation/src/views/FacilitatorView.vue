@@ -1,5 +1,5 @@
 <template>
-	<main v-if="this.workshopComponent === 'start'">
+	<main>
 		<div class="bg-white shadow-md rounded-lg p-8 max-w-4xl w-full">
 			<div class="flex justify-between items-start">
 				<div>
@@ -27,7 +27,8 @@
 				<canvas ref="qrcodeCanvas" class="h-24 w-24 mx-auto"></canvas>
 				<!-- <img src="qrcode.png" alt="QR Code" class="h-24 w-24 mx-auto"> -->
 			</div>
-			<div class="flex justify-end mt-4">
+
+			<div v-if="isFacilitator" class="flex justify-end mt-4">
 				<button @click="startWorkshop()" class="bg-gray-300 cursor text-gray-700 px-4 py-2 rounded-lg">Start</button>
 			</div>
 
@@ -40,23 +41,17 @@
 			</div>
 		</div>
 	</main>
-	<div v-if="this.workshopComponent === 'ExploreProblems'">
-		<button @click="exploreProblemsStartTimer()">Start Timer</button>
-		<div>15:00</div>
-		<h1>Explore Problems</h1>
 
-	</div>
-
-	<div v-if="this.state === 'join' || this.state === 'joining'" class="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-s bg-opacity-50">
+	<div v-if="state === 'join' || state === 'joining'" class="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-s bg-opacity-50">
 		<div class="bg-white p-8 rounded-lg shadow-2xl">
-			<div v-if="this.state === 'join'">
+			<div v-if="state === 'join'">
 				<h2 class="text-xl font-bold mb-4">Tell us who you are</h2>
 				<form @submit.prevent="saveUsername()">
 					<input ref="usernameInput" v-model="username" required minlength="3" class="mb-4 w-full block rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-black-600" placeholder="Your name" />
 					<button type="submit" class="bg-black text-white px-4 py-2 rounded-lg cursor-pointer">Save</button>
 				</form>
-			</div>
-			<div v-if="this.state === 'joining'">
+			</div>	
+			<div v-if="state === 'joining'">
 				<h2 class="text-xl font-bold mb-4">Joining...</h2>
 			</div>
 		</div>
@@ -77,8 +72,8 @@
 
 import QRCode from 'qrcode'
 import { nextTick } from 'vue'
-import { debounce } from 'lodash'
-
+import { throttle } from '../lib/utils'
+import { useWorkshopStore } from '../stores/workshop'
 export default {
 	props: {
 		room: String
@@ -89,11 +84,7 @@ export default {
 			socket: null,
 			username: '',
 			clientsList: new Map(),
-			workshopComponent: 'start',
-			workshopState: {
-				timer: 15 * 60,
-				status: 'stopped'
-			}
+			browserId: '',
 		}
 	},
 	mounted() {
@@ -101,7 +92,11 @@ export default {
 		this.generateQRCode(location + this.room);
 		this.trackCursorMovement();
 		this.setUpState();
-
+	},
+	computed: {
+		isFacilitator() {
+			return this.browserId === useWorkshopStore().facilitatorId;
+		}
 	},
 	methods: {
 		setUpState() {
@@ -120,6 +115,7 @@ export default {
 			//this.state = 'join';
 			// validation
 			localStorage.setItem('username', this.username);
+
 			this.joinWebSocket();
 			//	this.state = 'ready';
 		},
@@ -194,11 +190,11 @@ export default {
 			});
 		},
 		trackCursorMovement() {
-			window.addEventListener('mousemove', this.sendCursorPosition);
+			this.throttledSendCursorPosition = throttle(this.sendCursorPosition, 10);
+			window.addEventListener('mousemove', this.throttledSendCursorPosition);
 		},
 		sendCursorPosition(event) {
-			if (this.state !== 'joined')
-				return;
+			if (this.state !== 'joined') return;
 			this.socket.send(JSON.stringify({
 				type: 'cursorUpdate',
 				browserId: this.browserId,
@@ -240,19 +236,15 @@ export default {
 			}
 		},
 		startWorkshop() {
-			this.workshopComponent = 'ExploreProblems';
+			this.state = 'ready';
 			this.socket.send(JSON.stringify({
-				type: 'ExploreProblems',
-				timer: {
-					minutes: 15,
-					status: 'stopped'
-				},
+				type: 'startWorkshop',
 				browserId: this.browserId
 			}));
 		}
 	},
 	onUnmounted() {
-		window.removeEventListener('mousemove', this.sendCursorPosition);
+		window.removeEventListener('mousemove', this.throttledSendCursorPosition);
 	}
 }
 </script>

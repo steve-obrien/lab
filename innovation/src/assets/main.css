@@ -17,4 +17,4 @@
 .btn:focus, .btn:hover { @apply shadow-lg; }
 .btn:active { @apply shadow-inner-md; }
 
-.btn-fx { @apply transition shadow transform duration-150 hover:shadow-lg focus:shadow-lg active:shadow-inner-md } */ */
+.btn-fx { @apply transition shadow transform duration-150 hover:shadow-lg focus:shadow-lg active:shadow-inner-md } */

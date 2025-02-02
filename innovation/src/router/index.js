@@ -1,8 +1,8 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createMemoryHistory, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 
 const router = createRouter({
-	history: createWebHistory(import.meta.env.BASE_URL),
+	history: import.meta.env.SSR ? createMemoryHistory(import.meta.env.BASE_URL) : createWebHistory(import.meta.env.BASE_URL),
 	routes: [
 		{
 			path: '/',
@@ -19,7 +19,8 @@ const router = createRouter({
 			props: true, // Pass route params as props
 		},
 		{
-			path: '/workshop/:room',
+			// match a path like /abc-xyz-123
+			path: '/:room([a-z0-9]{3}-[a-z0-9]{3}-[a-z0-9]{3})',
 			name: 'workshop',
 			// route level code-splitting
 			// this generates a separate chunk (About.[hash].js) for this route

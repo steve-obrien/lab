@@ -16,7 +16,6 @@ const wsServer = new WebSocketServer({ port: 8080 });
 const rooms = new Map();
 
 
-
 wsServer.on('connection', (ws, req) => {
 
 	// Parse the query parameters from the request URL
@@ -52,14 +51,20 @@ wsServer.on('connection', (ws, req) => {
 
 	console.log(`Client connected with ID: ${ws.browserId} and code: ${ws.room}`);
 
+	// when connected we need to figure out who they are where they are get their data and that sort of thing.
+
 
 	ws.on('message', (message) => {
 		console.log('Received:', message);
 
 		const data = JSON.parse(message);
+
 		switch (data.type) {
 			case 'cursorUpdate':
 				updateCursor(data.x, data.y, ws);
+				break;
+			case 'facilitatorStartExploreProblems':
+				facilitatorStartExploreProblems(ws);
 				break;
 		}
 
@@ -78,22 +83,27 @@ wsServer.on('connection', (ws, req) => {
 
 function updateCursor(x, y, senderWs) {
 	const clients = rooms.get(senderWs.room);
-	console.log('room:',senderWs.room);
-	console.log('clients:', clients.size);
-	const cursorData = JSON.stringify({ 
-		type: 'cursorUpdate', 
-		browserId: senderWs.browserId, 
-		x: x, 
+	const cursorData = JSON.stringify({
+		type: 'cursorUpdate',
+		browserId: senderWs.browserId,
+		x: x,
 		y: y,
 		username: senderWs.username
 	});
-	console.log('updateCursor data:', cursorData);
 	clients.forEach((client) => {
 		if (client !== senderWs && client.readyState === WebSocket.OPEN) {
 			client.send(cursorData);
 		}
 	});
 }
+
+function facilitatorStartExploreProblems(ws) {
+	broadcastDataToClients(ws.room, {
+		type: 'facilitatorStartExploreProblems',
+	});
+}
+
+
 
 // Function to broadcast the list of client IDs to all clients
 function broadcastClientList(room) {
@@ -104,14 +114,20 @@ function broadcastClientList(room) {
 		browserId: client.browserId,
 		username: client.username
 	}));
-	
-	const message = JSON.stringify({ type: 'clientList', clients: clientList });
-	console.log('Broadcasting client list:', message);
+
+	broadcastDataToClients(room, { type: 'clientList', clients: clientList });
+}
+
+function broadcastDataToClients(room, data) {
+	const clients = rooms.get(room);
+	const message = JSON.stringify(data);
 	clients.forEach((client) => {
 		if (client.readyState === WebSocket.OPEN) {
 			client.send(message);
 		}
 	});
 }
+
+
 
 console.log('WebSocket server is running on ws://localhost:8080');

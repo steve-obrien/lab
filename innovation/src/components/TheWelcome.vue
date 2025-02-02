@@ -1,8 +1,9 @@
 <script setup>
-import WelcomeItem from './WelcomeItem.vue'
 import { useRouter } from 'vue-router'
 const router = useRouter()
 
+
+// api to create a workshop
 const createWorkshop = () => {
 
 	// API calls to generate a code.
@@ -13,7 +14,7 @@ const createWorkshop = () => {
 	const randomCode = generateRandomCode();
 
 	console.log('Generated Code:', randomCode);
-	router.push({ path: '/facilitator/'+randomCode })
+	router.push({ path: '/workshop/'+randomCode })
 }
 
 </script>
@@ -30,8 +31,6 @@ const createWorkshop = () => {
 			 https://newicon.net/firefly/file/img?id=UaAIgHx3SVzj01COXY6Bs9&amp;f=webp&amp;q=90&amp;w=1400 1400w, 
 			 https://newicon.net/firefly/file/img?id=UaAIgHx3SVzj01COXY6Bs9&amp;f=webp&amp;q=90&amp;w=2000 2000w, 
 			 https://newicon.net/firefly/file/img?id=UaAIgHx3SVzj01COXY6Bs9&amp;f=webp&amp;q=90&amp;w=2600 2600w">
-
-
 
 			<div class="relative z-10 max-w-[732px] text-center p-4">
 				<h1 class="text-white text-[70px] leading-[80px] font-medium mb-12">From design <span class="font-semibold">thinking</span> <br> to design <span class="font-semibold">doing</span></h1>
