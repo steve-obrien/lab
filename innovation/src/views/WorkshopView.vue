@@ -101,6 +101,15 @@
 
 <script>
 
+/**
+ * Remember: Everything works better when the components render from pure state.
+ * TODO: move all relevent state into store.
+ * TODO: use the store state to render the UI.
+ * The flows are complex - as we have facilitator state, client state, and overall workshop progress state.  
+ * Where everyone is collectivly. We also have the websocet to syncronise state.
+ * Then we have connections dropping *browsers refreshing*.
+ */
+
 import QRCode from 'qrcode'
 import { nextTick } from 'vue'
 import { throttle } from '../lib/utils'
