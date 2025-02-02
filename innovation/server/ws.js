@@ -88,7 +88,8 @@ function updateCursor(x, y, senderWs) {
 		browserId: senderWs.browserId,
 		x: x,
 		y: y,
-		username: senderWs.username
+		// we should not have to send this now.
+		// username: senderWs.username
 	});
 	clients.forEach((client) => {
 		if (client !== senderWs && client.readyState === WebSocket.OPEN) {
