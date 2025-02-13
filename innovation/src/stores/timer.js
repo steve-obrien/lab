@@ -5,7 +5,8 @@ export const useTimerStore = defineStore('timer', {
 		serverEndTime: null, // UNIX timestamp from server
 		remainingTime: 0, // Time left in seconds
 		intervalId: null, // as number or null
-		onFinish: null // as (() => void) | null // Callback function
+		onFinish: null, // as (() => void) | null // Callback function
+		status: 'initial', // 'initial', 'running', 'paused', 'finished'
 	}),
 
 	getters: {
@@ -46,6 +47,8 @@ export const useTimerStore = defineStore('timer', {
 				return;
 			}
 
+			this.status = 'running';
+
 			// Ensure any existing interval is cleared
 			if (this.intervalId) {
 				clearInterval(this.intervalId);
@@ -58,6 +61,7 @@ export const useTimerStore = defineStore('timer', {
 				if (this.remainingTime === 0) {
 					this.stopCountdown();
 					if (this.onFinish) {
+						this.status = 'finished';
 						this.onFinish();
 					}
 				}
@@ -72,10 +76,20 @@ export const useTimerStore = defineStore('timer', {
 
 		stopCountdown() {
 			if (this.intervalId) {
+				this.status = 'paused';
 				clearInterval(this.intervalId);
 				this.intervalId = null;
 			}
 		},
 
+		pauseCountdown() {
+			this.stopCountdown();
+		},
+
+		resumeCountdown() {
+			if (this.remainingTime > 0 && !this.intervalId) {
+				this.startCountdown();
+			}
+		},
 	}
 });

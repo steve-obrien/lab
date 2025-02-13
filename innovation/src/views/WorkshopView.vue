@@ -30,7 +30,7 @@
 			</div>
 
 			<div v-if="isFacilitator" class="flex justify-end mt-4">
-				<button @click="facilitatorStartExploreProblems()" class="bg-black cursor-pointer text-white px-4 py-2 rounded-lg">Start</button>
+				<button @click="facilitatorExploreProblemsStart()" class="bg-black cursor-pointer text-white px-4 py-2 rounded-lg">Start</button>
 			</div>
 
 		</div>
@@ -38,29 +38,31 @@
 	</main>
 	<main v-if="workshopStore.isExploreProblemsReady">
 		<div class="flex items-end">
-			<button @click="workshopStore.exploreProblemsGo()" class="bg-black text-white px-4 py-2  cursor-pointer">
+			<button v-if="isFacilitator" @click="broadcast('facilitatorExploreProblemsGo', {})" class="bg-black text-white px-4 py-2  cursor-pointer">
 				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6"><path fill-rule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clip-rule="evenodd" /></svg>
 			</button>
 			<div class="bg-black text-white px-4 py-2  cursor-pointer">
 				{{ workshopStore.exploreProblems.time }}
 			</div>
 		</div>
-		<h1 class="text-3xl font-bold">Explore Problems READY</h1>
+		<h1 class="text-3xl font-bold">Explore Problems READY - {{timerStore.status}}</h1>
 	</main>
 
 	<main v-if="workshopStore.isExploreProblemsGo">
 		<div class="flex items-end">
-			<button @click="workshopStore.exploreProblemsGo()" class="bg-black text-white px-4 py-2  cursor-pointer">
-				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6"><path fill-rule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clip-rule="evenodd" /></svg>
-			</button>
+			<div v-if="isFacilitator" class="flex gap-2">
+				<button  v-if="timerStore.status === 'running'"  @click="broadcast('facilitatorExploreProblemsPause', {})" class="bg-black text-white px-4 py-2  cursor-pointer">
+				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6"><path fill-rule="evenodd" d="M6.75 5.25a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25Zm7.5 0A.75.75 0 0 1 15 4.5h1.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25Z" clip-rule="evenodd" /></svg>
+				</button>
+				<button  v-if="timerStore.status === 'paused'"  @click="broadcast('facilitatorExploreProblemsResume', {})" class="bg-black text-white px-4 py-2  cursor-pointer">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6"><path fill-rule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clip-rule="evenodd" /></svg>
+				</button>
+			</div>
 			<div class="bg-black text-white px-4 py-2  cursor-pointer">
-				{{ workshopStore.exploreProblemsRemainingTime }}
-
-				- {{ timerStore.remainingTime }}
-				- {{ timerStore.time }}
+				{{ timerStore.time }}
 			</div>
 		</div>
-		<h1 class="text-3xl font-bold">Explore Problems GOGOGO!</h1>
+		<h1 class="text-3xl font-bold">Explore Problems GOGOGO! - {{timerStore.status}}</h1>
 	</main>
 
 
@@ -124,7 +126,7 @@ export default {
 		return {
 			state: 'start', // ['join', 'joining', 'joined', 'ready']
 			socket: null,
-			username: '',
+			name: '',
 			clientsList: new Map(),
 			browserId: '',
 
@@ -153,21 +155,14 @@ export default {
 	},
 	methods: {
 		setUpState() {
-			let storedUsername = localStorage.getItem('username');
-			if (storedUsername) {
-				this.username = storedUsername;
-				this.joinWebSocket();
-			} else {
-				this.state = 'join';
-				nextTick(() => {
-					this.$refs.usernameInput.focus();
-				});
-			}
+			userStore.loadState();
 		},
 		saveUsername() {
 			//this.state = 'join';
 			// validation
 			//localStorage.setItem('username', this.username);
+
+			// save the user.
 
 			this.joinWebSocket();
 			//	this.state = 'ready';
@@ -191,7 +186,8 @@ export default {
 			this.getBrowserUuid();
 
 			// Include the code as a query parameter in the WebSocket URL
-			this.socket = new WebSocket(`ws://localhost:8080?room=${this.room}&username=${this.username}&browserId=${this.browserId}`);
+			const host = import.meta.env.VITE_WS_HOST;
+			this.socket = new WebSocket(`${host}/?room=${this.room}&username=${this.username}&browserId=${this.browserId}`);
 
 			this.socket.onopen = () => {
 				console.log('WebSocket connection established');
@@ -230,10 +226,34 @@ export default {
 				case 'cursorUpdate':
 					this.handleUpdateCursor(data);
 					break;
-				case 'facilitatorStartExploreProblems':
+				case 'facilitatorExploreProblemsStart':
 					this.workshopStore.exploreProblemsStart();
 					break;
+				case 'facilitatorExploreProblemsGo':
+					this.workshopStore.exploreProblemsGo();
+					break;
+				case 'facilitatorExploreProblemsPause':
+					this.workshopStore.exploreProblemsPause();
+					break;
+				case 'facilitatorExploreProblemsResume':
+					this.workshopStore.exploreProblemsResume();
+					break;
 			}
+		},
+		facilitatorExploreProblemsStart() {
+			this.socket.send(JSON.stringify({
+				type: 'facilitatorExploreProblemsStart',
+			}));
+		},
+		broadcast(type, data) {
+			console.log('broadcast:', type, data);
+			this.socket.send(JSON.stringify({
+				type: 'broadcastDataToClients',
+				data: {
+					type:type, 
+					data:data
+				}
+			}));
 		},
 		generateQRCode(url) {
 			const canvas = this.$refs.qrcodeCanvas;
@@ -286,11 +306,6 @@ export default {
 			}
 		},
 
-		facilitatorStartExploreProblems() {
-			this.socket.send(JSON.stringify({
-				type: 'facilitatorStartExploreProblems',
-			}));
-		},
 
 	},
 	onUnmounted() {

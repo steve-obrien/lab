@@ -47,6 +47,9 @@ export const useWorkshopStore = defineStore('workshop', {
 	},
 	actions: { 
 		createWorkshop(facilitatorId) {
+
+			// we need to create a workshop on the server
+
 			// API calls to generate a code.
 			const generateRandomCode = () => {
 				const getRandomSegment = () => Math.random().toString(36).substring(2, 5).toLowerCase();
@@ -65,6 +68,12 @@ export const useWorkshopStore = defineStore('workshop', {
 			});
 			this.workshopState = STATE_exploreProblems_go;
 		},
+		exploreProblemsPause() {
+			useTimerStore().pauseCountdown();
+		},
+		exploreProblemsResume() {
+			useTimerStore().resumeCountdown();
+		}
 
 	},
 })

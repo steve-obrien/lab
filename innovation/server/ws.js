@@ -60,11 +60,19 @@ wsServer.on('connection', (ws, req) => {
 		const data = JSON.parse(message);
 
 		switch (data.type) {
+
+			// send the mouse positions to other clients
 			case 'cursorUpdate':
 				updateCursor(data.x, data.y, ws);
 				break;
-			case 'facilitatorStartExploreProblems':
-				facilitatorStartExploreProblems(ws);
+
+			case 'facilitatorExploreProblemsStart': 
+				facilitatorExploreProblemsStart(ws); 
+				break;
+
+			// send data to all clients in the room
+			case 'broadcastDataToClients':
+				broadcastDataToClients(ws.room, data.data);
 				break;
 		}
 
@@ -98,9 +106,9 @@ function updateCursor(x, y, senderWs) {
 	});
 }
 
-function facilitatorStartExploreProblems(ws) {
+function facilitatorExploreProblemsStart(ws) {
 	broadcastDataToClients(ws.room, {
-		type: 'facilitatorStartExploreProblems',
+		type: 'facilitatorExploreProblemsStart',
 	});
 }
 
@@ -128,7 +136,5 @@ function broadcastDataToClients(room, data) {
 		}
 	});
 }
-
-
 
 console.log('WebSocket server is running on ws://localhost:8080');
