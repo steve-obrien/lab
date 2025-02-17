@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
-
+import { watch } from 'vue';
+import { avatarUrl } from '../lib/utils';
 /**
  * Represents and tracks a single workshop with connected clients
  */
@@ -9,25 +10,33 @@ export const useUserStore = defineStore('user', {
 		name: '',
 		email: '',
 		password: '',
-
 		accessToken: null,
+		user: null,
+		showLoginDialog: false,
 	}),
+	getters: {
+		isLoggedIn: (state) => state.accessToken !== null,
+		isNotLoggedIn: (state) => state.accessToken === null,
+		avatarUrl: (state) => {
+			if (!state.email) return '';
+			return avatarUrl(state.email);
+		},
+	},
+
 	actions: {
-		async register() {
+		showLogin(onSuccessLogin) { this.$patch({ showLoginDialog: true, onSuccessLogin }) },
+		hideLogin() { this.$patch({ showLoginDialog: false }) },
+		async register(name, email, password) {
 			const response = await fetch('http://localhost:8181/api/register', {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({ name: this.name, email: this.email, password: this.password })
+				headers: {'Content-Type': 'application/json'},
+				body: JSON.stringify({ name, email, password })
 			});
 			const json = await response.json();
-			const user = json.data.user;
-			this.id = user.id;
-			this.name = user.name;
-			this.email = user.email;
-			this.password = user.password;
-			return response;
+			if (json.status == 'success') {
+				Object.assign(this, json.data.user)
+			}
+			return json;
 		},
 
 		async authRefresh() {
@@ -42,7 +51,6 @@ export const useUserStore = defineStore('user', {
 
 		async fetchUser() {
 			if (!this.accessToken) return;
-
 			try {
 				const response = await fetch("http://localhost:8181/api/me", {
 					method: "GET",
@@ -52,19 +60,13 @@ export const useUserStore = defineStore('user', {
 					},
 					credentials: "include", // Ensures cookies (if needed) are sent
 				});
-
 				if (!response.ok) {
 					throw new Error("Failed to fetch user");
 				}
-
-				const data = await response.json();
-				//this.user = data.user; // Store user in Pinia state
-				this.id = data.user.id;
-				this.name = data.user.name;
-				this.email = data.user.email;
-				this.password = '';
-
-
+				const json = await response.json();
+				if (json.status == 'success') {
+					Object.assign(this, json.data.user)
+				}
 			} catch (error) {
 				console.error("Failed to fetch user:", error.message);
 			}
@@ -72,13 +74,11 @@ export const useUserStore = defineStore('user', {
 
 		async refreshAccessToken() {
 			try {
-				const response = await fetch("http://localhost:8181/api/refresh", {
+				const response = await fetch(import.meta.env.VITE_API_HOST + "/api/refresh", {
 					method: "POST",
 					credentials: "include", // Sends the refresh token cookie automatically
 				});
-
 				if (!response.ok) throw new Error("Token refresh failed");
-
 				const data = await response.json();
 				this.accessToken = data.accessToken;
 				return true; // Token refreshed successfully
@@ -90,21 +90,19 @@ export const useUserStore = defineStore('user', {
 		},
 
 		// we could supply the password here rather than having it hang about in the state
-		async login() {
-
+		async login(email, password) {
 			const response = await fetch('http://localhost:8181/api/login', {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({ email: this.email, password: this.password }),
+				headers: {'Content-Type': 'application/json'},
+				body: JSON.stringify({ email: email, password: password }),
 				credentials: "include",
 			});
-			const data = await response.json();
-			// remove the password from the user object
-			this.password = '';
-
-			return this.id;
+			const json = await response.json();
+			if (json.status == 'success') {
+				this.accessToken = json.data.accessToken;
+				Object.assign(this, json.data.user)
+			}
+			return json;
 		},
 
 		async logout() {
@@ -117,6 +115,22 @@ export const useUserStore = defineStore('user', {
 			this.name = '';
 			this.email = '';
 			this.password = '';
-		}
+		},
+
+		async ensureUserLoggedIn() {
+			await this.authRefresh();
+			if (this.isLoggedIn) return;
+			// show the user login modal
+			this.showLogin();
+			await new Promise((resolve) => {
+				const unwatch = watch(() => this.isLoggedIn, (isLoggedIn) => {
+					if (isLoggedIn) {
+						this.hideLogin();
+						unwatch(); // Stop watching once logged in
+						resolve();
+					}
+				});
+			});
+		},
 	},
 })

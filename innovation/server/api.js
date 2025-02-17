@@ -1,4 +1,5 @@
-import express from 'express';
+import express from 'express'
+import http from 'http';
 import cors from 'cors'; // Import the cors package
 import dotenv from 'dotenv';
 import User from './models/User.js';
@@ -7,12 +8,14 @@ import cookieParser from 'cookie-parser'
 import knex from './db/knex.js';
 import useragent from "express-useragent";
 import authenticateToken from './middleware/auth.js';
-
+import { setupWebSocketServer } from './ws.js'; // Import the WebSocket setup function
+import Workshop from './models/Workshop.js';
 
 dotenv.config();
 
 const app = express();
-const port = 8181;
+const server = http.createServer(app);
+const port = process.env.SERVER_PORT;
 
 // ... existing code ...
 
@@ -29,6 +32,10 @@ app.use(useragent.express());
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 
+/**
+ * JSON responses based on https://github.com/omniti-labs/jsend
+ * @param {*} app 
+ */
 
 export default function defineServerApi(app) {
 
@@ -45,7 +52,7 @@ export default function defineServerApi(app) {
 	app.post("/api/login", async (req, res) => {
 
 		const { email, password } = req.body;
-
+console.log(req.useragent , req.ip)
 		const deviceInfo = `${req.useragent.platform} - ${req.useragent.browser}`;  // Example: "Windows - Chrome"
 
 		if (!email) return res.status(400).json({ status: "fail", data: { email: 'Email is required' } });
@@ -53,6 +60,7 @@ export default function defineServerApi(app) {
 	
 		// log the user in
 		const user = await User.login(email, password);
+		// user not found - invalid credentials
 		if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
 		const refreshExpires = 10 * 24 * 60 * 60 * 1000; // 10 days
@@ -61,7 +69,7 @@ export default function defineServerApi(app) {
 		const refreshToken = jwt.sign({ id: user.id }, JWT_REFRESH_SECRET, { expiresIn: "10d" });
 
 		// Store Refresh Token in Database with Device Info
-		await user.saveRefreshToken(refreshToken, deviceInfo, new Date(Date.now() + refreshExpires))
+		await user.saveRefreshToken(refreshToken, deviceInfo, new Date(Date.now() + refreshExpires), req.ip)
 
 		// Store refresh token in an HTTP-only cookie
 		res.cookie("refreshToken", refreshToken, {
@@ -72,7 +80,13 @@ export default function defineServerApi(app) {
 		});
 
 		// lets also return the user object
-		res.json({ status: "success", data: { accessToken, user: user.toJSON() } });
+		res.json({
+			status: "success",
+			data: { 
+				accessToken, 
+				user: user.toJSON() 
+			}
+		});
 	});
 
 
@@ -84,13 +98,16 @@ export default function defineServerApi(app) {
 			return res.status(400).json({ status: "fail", data: { email: 'Email already in use' } });
 		}
 		try {
-			const user = await User.create({ name, email, password })
-			res.json({
-				status: "success",
-				data: { user: user.toJSON() }
-			});
+			const user = new User({ name, email, password });
+			// must validate the password before hashing - otherwise empty passwords could be hashed
+			const saved = await user.save();
+			if (!saved) {
+				return res.status(400).json({ status: "fail", data: user.getErrorsByField() });
+			}
+			res.json({ status: "success", data: { user: user.toJSON() }});
 		} catch (error) {
-			res.status(500).json({ error: error.message, url: req.url, stack: error.stack });
+			console.error(req.url, error, error.stack);
+			res.status(500).json({ status: "error", message: "Server error" });
 		}
 	});
 
@@ -122,30 +139,67 @@ export default function defineServerApi(app) {
 			const userId = req.user.id; // Extracted from the JWT token
 	
 			// get the user data and state information.
-			
+			const user = await User.find(userId);
 
-			const user = await knex("users")
-				.where({ id: userId })
-				.select("id", "name", "email") // Never return password
-				.first();
-
-	
 			if (!user) {
-				return res.status(404).json({ error: "User not found" });
+				return res.status(404).json({ status: "error", message: "User not found" });
 			}
 	
-			res.json({ user });
+			res.json({ status: "success", data: { user: user.toJSON() }});
 		} catch (error) {
 			console.error(error);
-			res.status(500).json({ error: "Server error" });
+			res.status(500).json({ status: "error", message: "Server error"  });
 		}
 	});
 
+
+	app.post("/api/workshops", async (req, res) => {
+		const { facilitatorId, name } = req.body;
+		// reject if no facilitatorId
+		if (!facilitatorId) {
+			return res.status(400).json({ status: "fail", data: { facilitatorId: 'Facilitator ID is required' } });
+		}
+		console.log(req.body);
+		const workshop = new Workshop({created_by:facilitatorId, name:name});
+		const saved = await workshop.save();
+		if (!saved) {
+			return res.status(400).json({ status: "fail", data: workshop.getErrorsByField() });
+		} else {
+			res.json({ status: "success", data: { workshop: workshop.toJSON() }});
+		}
+	});
+
+	app.get("/api/workshops/:id", async (req, res) => {
+		const { id } = req.params;
+		const workshop = await Workshop.find(id);
+		if (!workshop) {
+			return res.status(404).json({ error: "Workshop not found" });
+		}
+		res.json({ status: "success", data: { workshop: workshop.toJSON() }});
+	});
+
+	app.post("/api/workshops/:id", authenticateToken, async (req, res) => {
+		const { id } = req.params;
+		const workshop = await Workshop.find(id);
+		Object.assign(workshop, req.body);
+		const saved = await workshop.save();
+		if (!saved) {
+			return res.status(400).json({ status: "fail", data: workshop.getErrorsByField() });
+		}
+		// broadcast the update to all clients
+		// broadcastDataToClients(workshop);
+		res.json({ status: "success", data: { workshop: workshop.toJSON() }});
+	});
 }
+
+// Setup WebSocket server
+setupWebSocketServer(server);
 
 defineServerApi(app)
 
+
+
 // Start the server
-app.listen(port, () => {
+server.listen(port, () => {
 	console.log(`Server is running on http://localhost:${port}`);
 });

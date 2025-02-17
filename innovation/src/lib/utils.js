@@ -1,6 +1,8 @@
+import md5 from 'md5';
+
 /**
  * Avoid costly calculations while the window size is in flux.
- * jQuery(window).on('resize', debounce(calculateLayout, 150));
+ * window.addEventListener('resize', debounce(calculateLayout, 150));
  * 
  * @param {*} func 
  * @param {*} func 
@@ -24,7 +26,7 @@ export function debounce(func, wait, immediate) {
 
 /**
  * Avoid running the same function twice within the specified timeframe.
- * jQuery(window).on('resize', throttle(calculateLayout, 150));
+ * window.addEventListener('resize', throttle(calculateLayout, 150));
  * 
  * @param {*} func 
  * @param {*} timeFrame 
@@ -41,3 +43,10 @@ export function throttle(func, timeFrame) {
 	};
 }
 
+
+export function avatarUrl(email) {
+	if (!email) return '';
+	const hash = md5(email.trim().toLowerCase());
+	// return `https://api.dicebear.com/9.x/adventurer-neutral/svg?seed=${email.trim().toLowerCase()}`;
+	return `https://www.gravatar.com/avatar/${hash}?d=mp`;
+}

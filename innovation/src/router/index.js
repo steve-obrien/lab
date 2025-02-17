@@ -20,12 +20,21 @@ const router = createRouter({
 		},
 		{
 			// match a path like /abc-xyz-123
-			path: '/:room([a-z0-9]{3}-[a-z0-9]{3}-[a-z0-9]{3})',
+			path: '/:workshopId([a-z0-9]{3}-[a-z0-9]{4}-[a-z0-9]{3}|[a-z0-9]{10})',
 			name: 'workshop',
 			// route level code-splitting
 			// this generates a separate chunk (About.[hash].js) for this route
 			// which is lazy-loaded when the route is visited.
 			component: () => import('../views/WorkshopView.vue'),
+			props: true, // Pass route params as props
+		},
+		{
+			path: '/test',
+			name: 'test',
+			// route level code-splitting
+			// this generates a separate chunk (About.[hash].js) for this route
+			// which is lazy-loaded when the route is visited.
+			component: () => import('../views/TestView.vue'),
 			props: true, // Pass route params as props
 		},
 	],

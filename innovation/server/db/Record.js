@@ -1,15 +1,17 @@
 import knex from './knex.js';
-
+import vine, { errors } from '@vinejs/vine';
 /**
  * A simple base class for all database rows.
  */
-class Row {
+export default class Record {
 	static table = '';
 	static attributes = [];
 	static hidden = [];
 	static primary = 'id';
+	static schema = {}; // Each subclass must define this
 	row = {};
-	
+	errors = [];
+
 
 	constructor(row = {}) {
 		if (!this.constructor.table || !this.constructor.attributes) {
@@ -38,8 +40,51 @@ class Row {
 		};
 	}
 
+	/**
+	 * Universal validation method using Vines
+	 */
+	async validate() {
+		this.errors = []; // Reset errors as an object
+
+		if (!this.constructor.schema) {
+			return true;
+		}
+
+		try {
+			const validator = vine.compile(this.constructor.schema)
+			await validator.validate(this.row)
+		} catch (error) {
+			if (error instanceof errors.E_VALIDATION_ERROR) {
+				this.errors = error.messages
+			}
+		}
+
+		return Object.keys(this.errors).length === 0;
+	}
+
+	hasErrors() {
+		return this.errors.length > 0;
+	}
+
+	getErrors() {
+		return this.errors;
+	}
+
+	getErrorsByField() {
+		const errors = {};
+		for (const err of this.getErrors()) {
+			errors[err.field] = err.message;
+		}
+		return errors;
+	}
+
 	async save() {
 		try {
+
+			if (!(await this.validate())) {
+				return false; // Stop saving if validation fails
+			}
+
 			console.log('saving record');
 			const existingRecord = await knex(this.constructor.table)
 				.where(this.constructor.primary, this.row[this.constructor.primary])
@@ -58,13 +103,18 @@ class Row {
 			}
 
 			await this.refresh();
+
+			// return true if success
+			return true;
 		} catch (error) {
 			console.error(`Error saving ${this.constructor.name}:`, error);
+			return false;
 		}
 	}
 
 	async refresh() {
-		const row = await knex(this.constructor.table).where(this.constructor.primary, this.row[this.constructor.primary]).first();
+		const row = await knex(this.constructor.table)
+			.where(this.constructor.primary, this.row[this.constructor.primary]).first();
 		this.populate(row);
 	}
 
@@ -89,12 +139,16 @@ class Row {
 	 * @returns this
 	 */
 	static async findBy(field, value) {
-		const row = await knex(this.table).where(field, value).first();
+		const row = await knex(this.table)
+			.where(field, value).first();
 		return row ? new this(row) : null;
 	}
 
 	static async find(id) {
-		const row = await knex(this.constructor.table).where(this.constructor.primary, id).first();
+		console.log(`finding ${this.primary} ${id} in table ${this.table}`)
+		const row = await knex(this.table)
+			.where(this.primary, id)
+			.first();
 		return row ? new this(row) : null;
 	}
 
@@ -103,12 +157,10 @@ class Row {
 	 * @returns {import('knex').QueryBuilder}
 	 */
 	static query() {
-		return knex(this.constructor.table);
+		return knex(this.table);
 	}
 
 	static db(table) {
 		return knex(table);
 	}
 }
-
-export default Row;

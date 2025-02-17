@@ -1,102 +1,120 @@
 <template>
-	<main v-if="workshopStore.isSetup">
+	<div class="bg-neutral-200 h-screen flex flex-col gap-4 p-8 w-full border-8 border-white rounded-xl">
 
-		<div class="bg-white shadow-md rounded-lg p-8 max-w-4xl w-full">
-			<div class="flex justify-between items-start">
-				<div>
-					<!-- <img src="logo.png" alt="Logo" class="h-12 mb-4"> -->
-					<h1 class="text-3xl font-bold">Innovation Day 2025</h1>
-					<p class="text-lg text-gray-600">New Icon</p>
+		<main v-if="workshopStore.isSetup" class="flex flex-col h-full">
+
+			<div class=" flex-grow flex gap-6 rounded-lg p-8 w-full">
+				<!-- intro-->
+				<div class="flex flex-col justify-between items-start">
+					<!-- title-->
+					<div class="h-full flex items-center">
+						<div>
+							<!-- <img src="logo.png" alt="Logo" class="h-12 mb-4"> -->
+							<h1 class="text-3xl font-bold">{{ workshopStore.name }}</h1>
+							<input type="text" v-model="workshopName" class="text-3xl font-bold" />
+							<p class="text-lg text-gray-600">New Icon</p>
+						</div>
+					</div>
+
+					<!-- join instructions -->
+					<div class="bg-neutral-300 border border-neutral-400 p-6 rounded-lg">
+						<h2 class="text-xl font-bold mb-2">Let's Innovate Together</h2>
+						<p class="text-gray-700 mb-4">
+							This guided session will help us define your goals, explore opportunities, and craft a clear roadmap for success.
+						</p>
+						<p class="text-gray-700 mb-4">
+							Join on <a href="#" class="text-blue-500 underline">{{ url }}</a> or scan the <strong>QR Code</strong>
+						</p>
+						Your room:
+						<pre>{{ workshopId }}</pre>
+						<canvas ref="qrcodeCanvas" class="h-24 w-24 mx-auto"></canvas>
+
+					</div>
+
 				</div>
-				<div class="bg-gray-200 rounded-lg p-4">
-					<h2 class="text-xl font-bold mb-2">Participants</h2>
-					<div :style="{ backgroundColor: client.color }" v-for="[key, client] in clientsList.entries()" :key="key" class="flex items-center justify-center px-5 py-2 m-4 rounded-sm bg-yellow-400  shadow-md">
-						<span class="text-white font-bold">{{ client.username }}</span>
+				<!-- participants-->
+				<div class="flex justify-between items-start w-full bg-white rounded-lg p-4">
+					<div class="  ">
+						<h2 class="text-xl font-bold mb-2">Participants</h2>
+						<div :style="{ backgroundColor: client.color }" v-for="[key, client] in clientsList.entries()" :key="key" class="flex items-center justify-center px-5 py-2 m-4 rounded-sm bg-yellow-400  shadow-md">
+							<img :src="avatarUrl(client.user.email)" alt="Avatar" class="w-6 h-6 rounded-full mr-2">
+							<span class="text-white font-bold">{{ client.user.name }}</span>
+						</div>
 					</div>
 				</div>
 			</div>
-			<div class="mt-8 bg-gray-200 p-6 rounded-lg">
-				<h2 class="text-xl font-bold mb-2">Let's Innovate Together</h2>
-				<p class="text-gray-700 mb-4">
-					This guided session will help us define your goals, explore opportunities, and craft a clear roadmap for success.
-				</p>
-				<p class="text-gray-700 mb-4">
-					Join on <a href="#" class="text-blue-500 underline">{{url}}</a> or scan the <strong>QR Code</strong>
-				</p>
-				Your room:
-				<pre>{{ room }}</pre>
-				<canvas ref="qrcodeCanvas" class="h-24 w-24 mx-auto"></canvas>
-				<!-- <img src="qrcode.png" alt="QR Code" class="h-24 w-24 mx-auto"> -->
-			</div>
 
-			<div v-if="isFacilitator" class="flex justify-end mt-4">
+			<div v-if="isFacilitator" class="flex justify-end mt-4 bg-neutral-400">
 				<button @click="facilitatorExploreProblemsStart()" class="bg-black cursor-pointer text-white px-4 py-2 rounded-lg">Start</button>
 			</div>
 
-		</div>
-
-	</main>
-	<main v-if="workshopStore.isExploreProblemsReady">
-		<div class="flex items-end">
-			<button v-if="isFacilitator" @click="broadcast('facilitatorExploreProblemsGo', {})" class="bg-black text-white px-4 py-2  cursor-pointer">
-				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6"><path fill-rule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clip-rule="evenodd" /></svg>
-			</button>
-			<div class="bg-black text-white px-4 py-2  cursor-pointer">
-				{{ workshopStore.exploreProblems.time }}
-			</div>
-		</div>
-		<h1 class="text-3xl font-bold">Explore Problems READY - {{timerStore.status}}</h1>
-	</main>
-
-	<main v-if="workshopStore.isExploreProblemsGo">
-		<div class="flex items-end">
-			<div v-if="isFacilitator" class="flex gap-2">
-				<button  v-if="timerStore.status === 'running'"  @click="broadcast('facilitatorExploreProblemsPause', {})" class="bg-black text-white px-4 py-2  cursor-pointer">
-				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6"><path fill-rule="evenodd" d="M6.75 5.25a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25Zm7.5 0A.75.75 0 0 1 15 4.5h1.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25Z" clip-rule="evenodd" /></svg>
+		</main>
+		<main v-if="workshopStore.isExploreProblemsReady">
+			<div class="flex items-end">
+				<button v-if="isFacilitator" @click="broadcast('facilitatorExploreProblemsGo', {})" class="bg-black text-white px-4 py-2  cursor-pointer">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+						<path fill-rule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clip-rule="evenodd" />
+					</svg>
 				</button>
-				<button  v-if="timerStore.status === 'paused'"  @click="broadcast('facilitatorExploreProblemsResume', {})" class="bg-black text-white px-4 py-2  cursor-pointer">
-					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6"><path fill-rule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clip-rule="evenodd" /></svg>
-				</button>
+				<div class="bg-black text-white px-4 py-2  cursor-pointer">
+					{{ workshopStore.exploreProblems.time }}
+				</div>
 			</div>
-			<div class="bg-black text-white px-4 py-2  cursor-pointer">
-				{{ timerStore.time }}
+			<h1 class="text-3xl font-bold">Explore Problems READY - {{ timerStore.status }}</h1>
+		</main>
+
+		<main v-if="workshopStore.isExploreProblemsGo">
+			<div class="flex items-end">
+				<div v-if="isFacilitator" class="flex gap-2">
+					<button v-if="timerStore.status === 'running'" @click="broadcast('facilitatorExploreProblemsPause', {})" class="bg-black text-white px-4 py-2  cursor-pointer">
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+							<path fill-rule="evenodd" d="M6.75 5.25a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25Zm7.5 0A.75.75 0 0 1 15 4.5h1.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25Z" clip-rule="evenodd" />
+						</svg>
+					</button>
+					<button v-if="timerStore.status === 'paused'" @click="broadcast('facilitatorExploreProblemsResume', {})" class="bg-black text-white px-4 py-2  cursor-pointer">
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+							<path fill-rule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clip-rule="evenodd" />
+						</svg>
+					</button>
+				</div>
+				<div class="bg-black text-white px-4 py-2  cursor-pointer">
+					{{ timerStore.time }}
+				</div>
+			</div>
+			<h1 class="text-3xl font-bold">Explore Problems GOGOGO! - {{ timerStore.status }}</h1>
+		</main>
+
+
+		<div class="absolute" v-for="[key, client] in clientsList.entries()" :key="key">
+			<div v-if="client.user.id !== userStore.id" class="shadow-md flex client-cursor bg-gray-200 rounded-lg p-2 px-4 text-white absolute" :style="{ left: client.x + 'px', top: client.y + 'px', backgroundColor: client.color }">
+				<img :src="avatarUrl(client.user.email)" alt="Avatar" class="w-6 h-6 rounded-full mr-2">
+				{{ client.user.name }}
+				<div class="absolute w-0 h-0 border-t-8 border-t-transparent border-b-5 border-b-transparent border-l-8" :style="{ borderLeftColor: client.color, top: '10%', left: '-5px', transform: 'translateY(-50%) rotate(200deg)' }"></div>
 			</div>
 		</div>
-		<h1 class="text-3xl font-bold">Explore Problems GOGOGO! - {{timerStore.status}}</h1>
-	</main>
 
-
-	<div v-for="[key, client] in clientsList.entries()" :key="key">
-		<div v-if="client.browserId !== browserId" class="shadow-md client-cursor bg-gray-200 rounded-lg p-2 px-4 text-white absolute" :style="{ left: client.x + 'px', top: client.y + 'px', backgroundColor: client.color }">
-			{{ client.username }}
-			<div class="absolute w-0 h-0 border-t-8 border-t-transparent border-b-5 border-b-transparent border-l-8" :style="{ borderLeftColor: client.color, top: '10%', left: '-5px', transform: 'translateY(-50%) rotate(200deg)' }"></div>
-		</div>
-	</div>
-
-	<div v-if="state === 'join' || state === 'joining'" class="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-s bg-opacity-50">
-		<div class="bg-white p-8 rounded-lg shadow-2xl">
-			<div v-if="state === 'join'">
-				<h2 class="text-xl font-bold mb-4">Tell us who you are</h2>
-				<form @submit.prevent="saveUsername()">
-					<input ref="usernameInput" v-model="username" required minlength="3" class="mb-4 w-full block rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-black-600" placeholder="Your name" />
-					<button type="submit" class="bg-black text-white px-4 py-2 rounded-lg cursor-pointer">Save</button>
-				</form>
-			</div>	
-			<div v-if="state === 'joining'">
+		<div v-if="state === 'joining'" class="fixed inset-0 flex items-center justify-center bg-black/20 backdrop-blur-s bg-opacity-50">
+			<div class="bg-white p-8 rounded-lg shadow-2xl">
 				<h2 class="text-xl font-bold mb-4">Joining...</h2>
 			</div>
 		</div>
+
 	</div>
 
-	<pre>
+	<pre class="overflow-scroll max-w-full">
+
+		{{ workshopStore }}
+
+
 		State: {{ state }}
-		BrowserId: {{ browserId }}
-		Username: {{ username }}
 		=========
 		ClientList:
 {{ clientsList }}
 
-{{ workshopStore }}
+
+
+USEr:
+{{ userStore }}
 	</pre>
 
 </template>
@@ -113,14 +131,15 @@
  */
 
 import QRCode from 'qrcode'
-import { nextTick } from 'vue'
 import { throttle } from '../lib/utils'
 import { useWorkshopStore } from '../stores/workshop'
 import { useTimerStore } from '../stores/timer'
+import { useUserStore } from '../stores/user'
+import { avatarUrl } from '../lib/utils'
 
 export default {
 	props: {
-		room: String
+		workshopId: String
 	},
 	data() {
 		return {
@@ -128,20 +147,40 @@ export default {
 			socket: null,
 			name: '',
 			clientsList: new Map(),
-			browserId: '',
 
 		}
 	},
 	mounted() {
 		window.app = this;
 		this.generateQRCode(this.url);
-		this.trackCursorMovement();
 		this.setUpState();
-
+		this.trackCursorMovement();
 	},
 	computed: {
+		workshopName: {
+			get() {
+				return this.workshopStore.name;
+			},
+			set(value) {
+				if (value !== this.workshopStore.name) {
+					//this.workshopStore.updateName(value);
+					this.workshopStore.name = value;
+					this.socket.send(JSON.stringify({
+						type: 'updateWorkshop',
+						data: {
+							name: this.workshopStore.name
+						}
+					}));
+					//this.notifyWebSocket();
+					//this.updateDatabase();
+				}
+			}
+		},
 		url() {
-			return location.origin + '/' + this.room;
+			return location.origin + '/' + this.workshopId;
+		},
+		userStore() {
+			return useUserStore();
 		},
 		workshopStore() {
 			return useWorkshopStore();
@@ -150,30 +189,34 @@ export default {
 			return useTimerStore();
 		},
 		isFacilitator() {
-			return this.browserId === this.workshopStore.facilitatorId;
-		}
+			return this.userStore.id === this.workshopStore.facilitatorId;
+		},
 	},
 	methods: {
-		setUpState() {
-			userStore.loadState();
-		},
-		saveUsername() {
-			//this.state = 'join';
-			// validation
-			//localStorage.setItem('username', this.username);
+		async setUpState() {
 
-			// save the user.
+			// get the workshop.
+			try {
+				await this.workshopStore.load(this.workshopId);
+			} catch (error) {
+				// 404
+				alert('not found')
+				return;
+			}
+
+			// Wait for the user to log in
+			this.state = 'join';
+			await this.userStore.ensureUserLoggedIn();
+
 
 			this.joinWebSocket();
-			//	this.state = 'ready';
+
 		},
-		getBrowserUuid() {
-			this.browserId = localStorage.getItem('browserId')
-			if (this.browserId === null) {
-				this.browserId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-				localStorage.setItem('browserId', this.browserId);
-			}
-			return this.browserId;
+		updateWorkshop(data) {
+			this.socket.send(JSON.stringify({
+				type: 'updateWorkshop',
+				data: data
+			}));
 		},
 		joinWebSocket() {
 			// validate the entry state.
@@ -183,11 +226,10 @@ export default {
 
 			// first we need to login this browser - and identify it - so we have a unique id to join the socket with.
 			// and if we refresh the page - we don't create a new participant.
-			this.getBrowserUuid();
-
+			// geerate a server token for this browser.
 			// Include the code as a query parameter in the WebSocket URL
 			const host = import.meta.env.VITE_WS_HOST;
-			this.socket = new WebSocket(`${host}/?room=${this.room}&username=${this.username}&browserId=${this.browserId}`);
+			this.socket = new WebSocket(`${host}/?room=${this.workshopId}&userId=${this.userStore.id}&username=${this.userStore.name}&browserId=${this.userStore.id}`);
 
 			this.socket.onopen = () => {
 				console.log('WebSocket connection established');
@@ -210,6 +252,8 @@ export default {
 			}
 
 			this.socket.onclose = () => {
+				// attempt to reconnect
+				this.joinWebSocket();
 				console.log('WebSocket connection closed');
 			};
 
@@ -238,20 +282,21 @@ export default {
 				case 'facilitatorExploreProblemsResume':
 					this.workshopStore.exploreProblemsResume();
 					break;
+				case 'data:workshop':
+					this.workshopStore.$patch(data.data.workshop);
+					break;
 			}
 		},
 		facilitatorExploreProblemsStart() {
-			this.socket.send(JSON.stringify({
-				type: 'facilitatorExploreProblemsStart',
-			}));
+			this.workshopStore.exploreProblemsStart(this.socket);
 		},
 		broadcast(type, data) {
 			console.log('broadcast:', type, data);
 			this.socket.send(JSON.stringify({
 				type: 'broadcastDataToClients',
 				data: {
-					type:type, 
-					data:data
+					type: type,
+					data: data
 				}
 			}));
 		},
@@ -270,7 +315,7 @@ export default {
 			if (this.state !== 'joined') return;
 			this.socket.send(JSON.stringify({
 				type: 'cursorUpdate',
-				browserId: this.browserId,
+				browserId: this.userStore.id,
 				x: event.clientX,
 				y: event.clientY
 			}));
@@ -292,7 +337,8 @@ export default {
 				this.clientsList.set(client.browserId, {
 					username: client.username,
 					browserId: client.browserId,
-					color: '#' + Math.floor(Math.random() * 16777215).toString(16)
+					color: '#' + Math.floor(Math.random() * 16777215).toString(16),
+					...client
 				});
 			});
 		},
@@ -306,7 +352,9 @@ export default {
 			}
 		},
 
-
+		avatarUrl(email) {
+			return avatarUrl(email);
+		},
 	},
 	onUnmounted() {
 		window.removeEventListener('mousemove', this.throttledSendCursorPosition);
@@ -314,5 +362,4 @@ export default {
 }
 </script>
 
-<style>
-</style>
+<style></style>
