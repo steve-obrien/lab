@@ -147,7 +147,7 @@ export default {
 			socket: null,
 			name: '',
 			clientsList: new Map(),
-
+			isRemoteUpdate: false,
 		}
 	},
 	mounted() {
@@ -208,7 +208,6 @@ export default {
 			this.state = 'join';
 			await this.userStore.ensureUserLoggedIn();
 
-
 			this.joinWebSocket();
 
 		},
@@ -260,6 +259,21 @@ export default {
 			this.socket.onerror = (error) => {
 				console.error('WebSocket error:', error);
 			};
+
+			// experimental
+			// ideally we could just sync the workshopstore across all connected clients
+			// then updating the state would work for everyone.
+			// This works for updating the name - via this.workshopName = 'new name';
+			// but we get some infinite looping over the socket with generic subscriber.
+			// this.workshopStore.$subscribe((mutation, state) => {
+			// 	if (!this.isRemoteUpdate) {
+			// 		console.log('workshopStore changed:', mutation, state);
+			// 		this.updateWorkshop({
+			// 			data: state
+			// 		});
+			// 	}
+			// 	this.isRemoteUpdate = false; // Reset the flag after sending
+			// });
 		},
 		handleSocketData(data) {
 			console.log('handleSocketData:', data);
@@ -283,6 +297,7 @@ export default {
 					this.workshopStore.exploreProblemsResume();
 					break;
 				case 'data:workshop':
+					this.isRemoteUpdate = true;
 					this.workshopStore.$patch(data.data.workshop);
 					break;
 			}

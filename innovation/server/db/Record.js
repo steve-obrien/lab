@@ -90,16 +90,21 @@ export default class Record {
 				.where(this.constructor.primary, this.row[this.constructor.primary])
 				.first();
 
+			const result = {};
+			for (const key of this.constructor.attributes) {
+				result[key] = this.row[key];
+			}
+
 			if (existingRecord) {
-				console.log('update record');
+				console.log('update record', result);
 				// Update the existing record
 				await knex(this.constructor.table)
 					.where(this.constructor.primary, this.row[this.constructor.primary])
-					.update(this.row);
+					.update(result);
 			} else {
-				console.log('inserting new record', this.row);
+				console.log('inserting new record', result);
 				// Insert a new record
-				await knex(this.constructor.table).insert(this.row);
+				await knex(this.constructor.table).insert(result);
 			}
 
 			await this.refresh();
