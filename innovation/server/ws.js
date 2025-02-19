@@ -7,10 +7,14 @@ import db from './db/knex.js';
 // each room id - has a clients map.
 const rooms = new Map();
 
+
+
 export function setupWebSocketServer(server) {
 
 	// Create a WebSocket server
 	const wsServer = new WebSocketServer({ server });
+
+	let globalState = {}
 
 	wsServer.on('connection', async (ws, req) => {
 		// Parse the query parameters from the request URL
@@ -27,19 +31,23 @@ export function setupWebSocketServer(server) {
 		ws.room = parameters.room;
 
 		// Insert or update client in the database
-		await db('workshop_users')
-			.insert({
-				user_id: ws.userId,
-				workshop_id: ws.room.replace(/-/g, ''),
-				status: 'connected',
-			})
-			.onConflict(['user_id', 'workshop_id'])
-			.merge();
+		// await db('workshop_users')
+		// 	.insert({
+		// 		user_id: ws.userId,
+		// 		workshop_id: ws.room.replace(/-/g, ''),
+		// 		status: 'connected',
+		// 	})
+		// 	.onConflict(['user_id', 'workshop_id'])
+		// 	.merge();
 
 		// if the room does not exist, create it
 		if (!rooms.has(ws.room)) {
 			rooms.set(ws.room, new Map());
 		}
+
+
+
+		ws.send(JSON.stringify({ type: 'updateState', state: globalState }));
 
 		// add the client to the room
 		const clients = rooms.get(ws.room)
@@ -89,6 +97,23 @@ export function setupWebSocketServer(server) {
 
 				case 'client:workshop:update':
 					await updateWorkshop(ws, packet.data);
+					break;
+
+				case 'updateState':
+					globalState = packet.data.state;
+					console.log('State updated:', globalState);
+					const clients = rooms.get(ws.room);
+					// Broadcast new state to all connected clients
+					clients.forEach(client => {
+						if (client.readyState === WebSocket.OPEN) {
+							client.send(JSON.stringify({ 
+								type: 'updateState',  
+								data: { 
+									state: globalState 
+								}
+							}));
+						}
+					});
 					break;
 			}
 

@@ -1,6 +1,8 @@
 <template>
 	<div class="bg-neutral-200 h-screen flex flex-col gap-4 p-8 w-full border-8 border-white rounded-xl">
 
+		{{ sharedStore }}
+
 		<main v-if="workshopStore.isSetup" class="flex flex-col h-full">
 
 			<div class=" flex-grow flex gap-6 rounded-lg p-8 w-full">
@@ -136,6 +138,7 @@ import { useWorkshopStore } from '../stores/workshop'
 import { useTimerStore } from '../stores/timer'
 import { useUserStore } from '../stores/user'
 import { avatarUrl } from '../lib/utils'
+import { useSharedStore } from '../stores/shared'
 
 export default {
 	props: {
@@ -179,6 +182,9 @@ export default {
 		url() {
 			return location.origin + '/' + this.workshopId;
 		},
+		sharedStore() {
+			return useSharedStore();
+		},
 		userStore() {
 			return useUserStore();
 		},
@@ -209,6 +215,7 @@ export default {
 			await this.userStore.ensureUserLoggedIn();
 
 			this.joinWebSocket();
+			this.sharedStore.initializeWebSocket(this.workshopId, this.userStore.id, this.userStore.name);
 
 		},
 		updateWorkshop(data) {
