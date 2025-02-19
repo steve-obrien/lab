@@ -22,10 +22,11 @@ async function createRefreshTokenTable() {
 	if (!exists) {
 		await knex.schema.createTable("refresh_tokens", (table) => {
 			table.increments("id").primary();
-			table.string("user_id", 26).references("id").inTable("users").onDelete("CASCADE");
+			table.char("user_id", 26).references("id").inTable("users").onDelete("CASCADE");
 			table.text("token").notNullable().unique();
 			table.string("device_info").nullable(); // Optional: Store device info
 			table.string("ip_address").nullable(); // Optional: Store IP address
+			table.datetime("expires_at").nullable();
 			table.datetime("created_at").defaultTo(knex.fn.now());
 			table.datetime("updated_at").defaultTo(knex.raw('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'));
 		});
@@ -40,7 +41,7 @@ async function createWorkshopTable() {
 			table.string("name").nullable();
 			table.string("state").nullable().comment('The current state name of the workshop');
 			table.json("data").nullable().comment('Json data relevent to the state');
-			table.string("created_by", 26).references("id").inTable("users").comment('This becomes the facilitator id');
+			table.char("created_by", 26).references("id").inTable("users").comment('This becomes the facilitator id');
 			table.datetime("created_at").defaultTo(knex.fn.now());
 			table.datetime("updated_at").defaultTo(knex.raw('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'));
 		});
