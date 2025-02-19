@@ -47,7 +47,7 @@ export function setupWebSocketServer(server) {
 
 
 
-		ws.send(JSON.stringify({ type: 'updateState', state: globalState }));
+		ws.send(JSON.stringify({ type: 'client:updateState', data: { state: globalState } }));
 
 		// add the client to the room
 		const clients = rooms.get(ws.room)
@@ -99,7 +99,7 @@ export function setupWebSocketServer(server) {
 					await updateWorkshop(ws, packet.data);
 					break;
 
-				case 'updateState':
+				case 'server:updateState':
 					globalState = packet.data.state;
 					console.log('State updated:', globalState);
 					const clients = rooms.get(ws.room);
@@ -107,7 +107,7 @@ export function setupWebSocketServer(server) {
 					clients.forEach(client => {
 						if (client.readyState === WebSocket.OPEN) {
 							client.send(JSON.stringify({ 
-								type: 'updateState',  
+								type: 'client:updateState',  
 								data: { 
 									state: globalState 
 								}

@@ -215,7 +215,6 @@ export default {
 			await this.userStore.ensureUserLoggedIn();
 
 			this.joinWebSocket();
-			this.sharedStore.initializeWebSocket(this.workshopId, this.userStore.id, this.userStore.name);
 
 		},
 		updateWorkshop(data) {
@@ -239,6 +238,7 @@ export default {
 
 			this.socket.onopen = () => {
 				console.log('WebSocket connection established');
+				this.sharedStore.initializeWebSocket(this.socket);
 				this.state = 'joined';
 			};
 
@@ -282,14 +282,14 @@ export default {
 			// 	this.isRemoteUpdate = false; // Reset the flag after sending
 			// });
 		},
-		handleSocketData(data) {
-			console.log('handleSocketData:', data);
-			switch (data.type) {
+		handleSocketData(packet) {
+			console.log('handleSocketData:', packet);
+			switch (packet.type) {
 				case 'clientList':
-					this.handleClientList(data);
+					this.handleClientList(packet);
 					break;
 				case 'cursorUpdate':
-					this.handleUpdateCursor(data);
+					this.handleUpdateCursor(packet);
 					break;
 				case 'facilitatorExploreProblemsStart':
 					this.workshopStore.exploreProblemsStart();
@@ -305,7 +305,11 @@ export default {
 					break;
 				case 'data:workshop':
 					this.isRemoteUpdate = true;
-					this.workshopStore.$patch(data.data.workshop);
+					this.workshopStore.$patch(packet.data.workshop);
+					break;
+				case 'client:updateState':
+					console.log('UPDATE STATE!', packet);
+					this.sharedStore.$patch(packet.data.state); // Apply received state
 					break;
 			}
 		},
