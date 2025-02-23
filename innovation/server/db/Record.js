@@ -86,13 +86,19 @@ export default class Record {
 			}
 
 			console.log('saving record');
+			// should probably just check for primary key existing: const primaryKey = this.row[this.constructor.primary];
 			const existingRecord = await knex(this.constructor.table)
 				.where(this.constructor.primary, this.row[this.constructor.primary])
 				.first();
 
 			const result = {};
 			for (const key of this.constructor.attributes) {
-				result[key] = this.row[key];
+				// if key is an object with a type property, then it is an attribute
+				if (this.constructor.casts && this.constructor.casts[key]) {
+					result[key] = this.constructor.casts[key].toDb(this.row[key]);
+				} else {
+					result[key] = this.row[key];
+				}
 			}
 
 			if (existingRecord) {
@@ -131,7 +137,13 @@ export default class Record {
 		const result = {};
 		for (const key of this.constructor.attributes) {
 			if (!this.constructor.hidden.includes(key)) {
-				result[key] = this.row[key];
+				// if key is an object with a type property, then it is an attribute and we need to use the fromDb method
+				if (this.constructor.casts && this.constructor.casts[key]) {
+					console.log('json from db', this.constructor.casts[key].fromDb(this.row[key]));
+					result[key] = this.constructor.casts[key].fromDb(this.row[key]);
+				} else {
+					result[key] = this.row[key];
+				}
 			}
 		}
 		return result;
@@ -149,6 +161,11 @@ export default class Record {
 		return row ? new this(row) : null;
 	}
 
+	/**
+	 * Find a row by an id
+	 * @param {*} id 
+	 * @returns {Promise<this|null>}
+	 */
 	static async find(id) {
 		console.log(`finding ${this.primary} ${id} in table ${this.table}`)
 		const row = await knex(this.table)

@@ -12,20 +12,14 @@ export function createApp() {
 	// const app = createSSRApp(App)
 	const app = createSpaApp(App)
 	const pinia = createPinia()
-	pinia.use(function mutationWarningPlugin({ store }) {
-		store.$subscribe((mutation, state) => {
-			console.log('mutation', mutation)
-			if (mutation.type == 'direct') {
-				console.log('Careful with direct mutation!', mutation)
-			}
-			// if (!mutation.events.some(event => event.type === 'action')) {
-			// 	console.warn(
-			// 		`[Pinia Warning]: Direct mutation detected in store "${store.$id}". ` +
-			// 		`Mutate state inside actions instead.`
-			// 	);
-			// }
-		});
-	});
+	// pinia.use(function mutationWarningPlugin({ store }) {
+	// 	store.$subscribe((mutation, state) => {
+	// 		console.log('mutation', mutation)
+	// 		if (mutation.type == 'direct') {
+	// 			console.log('Careful with direct mutation!', mutation)
+	// 		}
+	// 	});
+	// });
 
 	app.use(pinia)
 	app.use(router)

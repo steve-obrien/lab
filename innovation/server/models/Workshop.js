@@ -2,9 +2,28 @@ import Record from '../db/Record.js';
 import vine from '@vinejs/vine'
 import { customAlphabet } from 'nanoid'
 
+const json = (name) => {
+	return {
+		type: 'attr',
+		name: name,
+		toDb: (value) => {
+			if (typeof value === 'object') {
+				return JSON.stringify(value);
+			}
+			return value;
+		},
+		fromDb: (value) => {
+			return JSON.parse(value);
+		}
+	}
+}
+
 export default class Workshop extends Record {
 	static table = 'workshops'
 	static attributes = ['id', 'name', 'state', 'data', 'created_by']
+	static casts = {
+		data: json('data'),
+	}
 
 	constructor(row = {}) {
 		super(row);
@@ -21,7 +40,9 @@ export default class Workshop extends Record {
 		name: vine.string().optional(),
 	});
 
-	// Override the find method
+	/**
+	 * @inheritdoc
+	 */
 	static async find(id) {
 		const formattedId = this.format(id); // Call the format method
 		return super.find(formattedId); // Call the parent find method with the modified id

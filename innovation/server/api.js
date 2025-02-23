@@ -10,24 +10,16 @@ import useragent from "express-useragent";
 import authenticateToken from './middleware/auth.js';
 import { setupWebSocketServer } from './ws.js'; // Import the WebSocket setup function
 import Workshop from './models/Workshop.js';
-
+import { broadcastWorkshopUpdates } from './ws.js';
 dotenv.config();
 
-const app = express();
-const server = http.createServer(app);
-const port = process.env.SERVER_PORT;
+// const app = express();
+// const server = http.createServer(app);
+// const port = process.env.SERVER_PORT;
 
 // ... existing code ...
 
-app.use(cors({
-	origin: "http://localhost:5173", // Allow requests from your frontend
-	credentials: true, // Allow cookies to be sent and received
-	methods: ["GET", "POST", "PUT", "DELETE"], // Allow necessary methods
-	allowedHeaders: ["Content-Type", "Authorization"], // Allow these headers
-}));
-app.use(express.json());
-app.use(cookieParser());
-app.use(useragent.express());
+
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
@@ -38,6 +30,18 @@ const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
  */
 
 export default function defineServerApi(app) {
+
+	app.use(cors({
+		origin: ["*","http://localhost:5173", "http://localhost:8181", "http://localhost:3000"], // Allow requests from your frontend
+		credentials: true, // Allow cookies to be sent and received
+		methods: ["GET", "POST", "PUT", "DELETE"], // Allow necessary methods
+		allowedHeaders: ["Content-Type", "Authorization"], // Allow these headers
+	}));
+	app.use(express.json());
+	app.use(cookieParser());
+	app.use(useragent.express());
+
+
 
 	app.get('/api/hello', (req, res) => {
 		res.send('Hello World');
@@ -165,7 +169,8 @@ console.log(req.useragent , req.ip)
 		if (!saved) {
 			return res.status(400).json({ status: "fail", data: workshop.getErrorsByField() });
 		} else {
-			res.json({ status: "success", data: { workshop: workshop.toJSON() }});
+			const workshopData = workshop.toJSON();
+			res.json({ status: "success", data: { workshop: workshopData }});
 		}
 	});
 
@@ -188,18 +193,21 @@ console.log(req.useragent , req.ip)
 		}
 		// broadcast the update to all clients
 		// broadcastDataToClients(workshop);
-		res.json({ status: "success", data: { workshop: workshop.toJSON() }});
+		const workshopData = workshop.toJSON();
+		res.json({ status: "success", data: { workshop: workshopData }});
+		console.log('broadcasting workshop updates', workshopData);
+		broadcastWorkshopUpdates(workshop.id, workshopData);
 	});
 }
 
 // Setup WebSocket server
-setupWebSocketServer(server);
+// const broadcastDataToClients = setupWebSocketServer(server);
 
-defineServerApi(app)
+// defineServerApi(app)
 
 
 
-// Start the server
-server.listen(port, () => {
-	console.log(`Server is running on http://localhost:${port}`);
-});
+// // Start the server
+// server.listen(port, () => {
+// 	console.log(`Server is running on http://localhost:${port}`);
+// });

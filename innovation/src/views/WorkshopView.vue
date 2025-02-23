@@ -1,7 +1,6 @@
 <template>
 	<div class="bg-neutral-200 h-screen flex flex-col gap-4 p-8 w-full border-8 border-white rounded-xl">
 
-		{{ sharedStore }}
 
 		<main v-if="workshopStore.isSetup" class="flex flex-col h-full">
 
@@ -53,37 +52,44 @@
 		</main>
 		<main v-if="workshopStore.isExploreProblemsReady">
 			<div class="flex items-end">
-				<button v-if="isFacilitator" @click="broadcast('facilitatorExploreProblemsGo', {})" class="bg-black text-white px-4 py-2  cursor-pointer">
+				<button v-if="isFacilitator" @click="workshopStore.exploreProblemsGo" class="bg-black text-white px-4 py-2 cursor-pointer">
 					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
 						<path fill-rule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clip-rule="evenodd" />
 					</svg>
 				</button>
 				<div class="bg-black text-white px-4 py-2  cursor-pointer">
-					{{ workshopStore.exploreProblems.time }}
+					{{ workshopStore.data?.exploreProblems?.time }}
 				</div>
 			</div>
-			<h1 class="text-3xl font-bold">Explore Problems READY - {{ timerStore.status }}</h1>
+			<h1 class="text-3xl font-bold">Explore Problems READY </h1>
 		</main>
 
 		<main v-if="workshopStore.isExploreProblemsGo">
 			<div class="flex items-end">
 				<div v-if="isFacilitator" class="flex gap-2">
-					<button v-if="timerStore.status === 'running'" @click="broadcast('facilitatorExploreProblemsPause', {})" class="bg-black text-white px-4 py-2  cursor-pointer">
+					<button @click="workshopStore.exploreProblemsPause" class="bg-black text-white px-4 py-2 cursor-pointer">
 						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
 							<path fill-rule="evenodd" d="M6.75 5.25a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25Zm7.5 0A.75.75 0 0 1 15 4.5h1.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25Z" clip-rule="evenodd" />
 						</svg>
 					</button>
-					<button v-if="timerStore.status === 'paused'" @click="broadcast('facilitatorExploreProblemsResume', {})" class="bg-black text-white px-4 py-2  cursor-pointer">
+					<button @click="workshopStore.exploreProblemsResume" class="bg-black text-white px-4 py-2  cursor-pointer">
 						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
 							<path fill-rule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clip-rule="evenodd" />
 						</svg>
 					</button>
 				</div>
 				<div class="bg-black text-white px-4 py-2  cursor-pointer">
-					{{ timerStore.time }}
+					{{ timer }} === {{ remainingTime }}
 				</div>
 			</div>
-			<h1 class="text-3xl font-bold">Explore Problems GOGOGO! - {{ timerStore.status }}</h1>
+			<h1 class="text-3xl font-bold">Explore Problems GOGOGO! - {{ timerStatus }}   {{workshopStore.data.exploreProblems.stopTime}}   {{stopTime}}</h1>
+
+			<div class="flex flex-col gap-2">
+
+				<button @click="addProblem">Add Problem</button>
+
+				{{workshopStore.data.exploreProblems.problems}}
+			</div>
 		</main>
 
 
@@ -105,18 +111,18 @@
 
 	<pre class="overflow-scroll max-w-full">
 
-		{{ workshopStore }}
+	{{ workshopStore }}
 
 
-		State: {{ state }}
-		=========
-		ClientList:
-{{ clientsList }}
+	State: {{ state }}
+	=========
+	ClientList:
+	{{ clientsList }}
 
 
 
-USEr:
-{{ userStore }}
+	USEr:
+	{{ userStore }}
 	</pre>
 
 </template>
@@ -135,10 +141,10 @@ USEr:
 import QRCode from 'qrcode'
 import { throttle } from '../lib/utils'
 import { useWorkshopStore } from '../stores/workshop'
-import { useTimerStore } from '../stores/timer'
+import { useTimer } from '../composable/timer.js'
 import { useUserStore } from '../stores/user'
 import { avatarUrl } from '../lib/utils'
-import { useSharedStore } from '../stores/shared'
+import { nextTick, watch, ref, computed } from 'vue';
 
 export default {
 	props: {
@@ -151,7 +157,83 @@ export default {
 			name: '',
 			clientsList: new Map(),
 			isRemoteUpdate: false,
+			timer: null,
 		}
+	},
+	setup() {
+		const workshopStore = useWorkshopStore();
+
+		/**
+		 * This is all dedicated to watching timers.
+		 * The idea is we just update the data and the timer starts automatically and syncs across clients
+		 * So setting: 
+		 * ```
+		 * const tenMinutesInTheFuture = new Date().getTime() + 10 * 60 * 1000
+		 * workshop.data.exploreProblems.timerStop = tenMinutesInTheFuture
+		 * workshop.data.exploreProblems.timerStatus = 'running'
+		 * ```
+		 * will start the timer and sync it across all clients.
+		 * 
+		 * We should be able to make this composable - or a seperate component.
+		 * Whilst I went down the composable route this adds confusion with reactive data.
+		 * Where sometimes the watcher does not fire or the returned data is no longer reactive.
+		 * However probably a vue component with props for status - stopTime and emitting and event once done
+		 * is probably the better approach.
+		 */
+
+		const remainingTime = ref(0);
+		const intervalId = ref(null);
+
+		const timer = computed(() => {
+			const hours = Math.floor(remainingTime.value / 3600);
+			const minutes = Math.floor((remainingTime.value % 3600) / 60);
+			const seconds = remainingTime.value % 60;
+
+			const formattedHours = hours > 0 ? String(hours).padStart(2, '0') + ':' : '';
+			const formattedMinutes = String(minutes).padStart(2, '0');
+			const formattedSeconds = String(seconds).padStart(2, '0');
+
+			return `${formattedHours}${formattedMinutes}:${formattedSeconds}`;
+		});
+
+		const updateRemainingTime = () => {
+			console.log('tick')
+			const currentTime = Date.now();
+			remainingTime.value = Math.max(0, Math.floor((workshopStore.$state.data.exploreProblems.stopTime - currentTime) / 1000));
+
+			if (remainingTime.value === 0) {
+				clearInterval(intervalId.value);
+				intervalId.value = null;
+				if (onComplete) {
+					onComplete(); // Trigger the callback
+				}
+			}
+		};
+
+		watch(() => workshopStore.$state.data.exploreProblems.timerStatus, (newStatus) => {
+			console.log('timerStatus', newStatus);
+			if (newStatus === 'running') {
+				if (intervalId.value) {
+					clearInterval(intervalId.value);
+				}
+				updateRemainingTime();
+				intervalId.value = setInterval(updateRemainingTime, 1000);
+			} else {
+				clearInterval(intervalId.value);
+				intervalId.value = null;
+			}
+		});
+
+		const timerStatus = computed(() => workshopStore.$state.data.exploreProblems.timerStatus);
+
+		// Expose timer properties
+		return {
+			timer,
+			remainingTime,
+			timerStatus
+		};
+
+
 	},
 	mounted() {
 		window.app = this;
@@ -160,30 +242,25 @@ export default {
 		this.trackCursorMovement();
 	},
 	computed: {
+		stopTime() {
+			const stopTime = new Date(this.workshopStore.data.exploreProblems.stopTime);
+			const hours = stopTime.getHours().toString().padStart(2, '0');
+			const minutes = stopTime.getMinutes().toString().padStart(2, '0');
+			const seconds = stopTime.getSeconds().toString().padStart(2, '0');
+			return `${hours}:${minutes}:${seconds}`;
+		},
 		workshopName: {
 			get() {
 				return this.workshopStore.name;
 			},
 			set(value) {
 				if (value !== this.workshopStore.name) {
-					//this.workshopStore.updateName(value);
 					this.workshopStore.name = value;
-					this.socket.send(JSON.stringify({
-						type: 'updateWorkshop',
-						data: {
-							name: this.workshopStore.name
-						}
-					}));
-					//this.notifyWebSocket();
-					//this.updateDatabase();
 				}
 			}
 		},
 		url() {
 			return location.origin + '/' + this.workshopId;
-		},
-		sharedStore() {
-			return useSharedStore();
 		},
 		userStore() {
 			return useUserStore();
@@ -191,11 +268,19 @@ export default {
 		workshopStore() {
 			return useWorkshopStore();
 		},
-		timerStore() {
-			return useTimerStore();
-		},
 		isFacilitator() {
 			return this.userStore.id === this.workshopStore.facilitatorId;
+		},
+		time() {
+			const hours = Math.floor(remainingTime.value / 3600);
+			const minutes = Math.floor((remainingTime.value % 3600) / 60);
+			const seconds = remainingTime.value % 60;
+
+			const formattedHours = hours > 0 ? String(hours).padStart(2, '0') + ':' : '';
+			const formattedMinutes = String(minutes).padStart(2, '0');
+			const formattedSeconds = String(seconds).padStart(2, '0');
+
+			return `${formattedHours}${formattedMinutes}:${formattedSeconds}`;
 		},
 	},
 	methods: {
@@ -214,7 +299,7 @@ export default {
 			this.state = 'join';
 			await this.userStore.ensureUserLoggedIn();
 
-			this.joinWebSocket();
+			this.workshopStore.joinWebsocket();
 
 		},
 		updateWorkshop(data) {
@@ -223,114 +308,16 @@ export default {
 				data: data
 			}));
 		},
-		joinWebSocket() {
-			// validate the entry state.
-			// you can only join if you have a unique username.
-
-			this.state = 'joining';
-
-			// first we need to login this browser - and identify it - so we have a unique id to join the socket with.
-			// and if we refresh the page - we don't create a new participant.
-			// geerate a server token for this browser.
-			// Include the code as a query parameter in the WebSocket URL
-			const host = import.meta.env.VITE_WS_HOST;
-			this.socket = new WebSocket(`${host}/?room=${this.workshopId}&userId=${this.userStore.id}&username=${this.userStore.name}&browserId=${this.userStore.id}`);
-
-			this.socket.onopen = () => {
-				console.log('WebSocket connection established');
-				this.sharedStore.initializeWebSocket(this.socket);
-				this.state = 'joined';
-			};
-
-			this.socket.onmessage = (event) => {
-				console.log('Received onmessage:', event);
-				if (event.data instanceof Blob) {
-					const reader = new FileReader();
-					reader.onload = () => {
-						const data = JSON.parse(reader.result);
-						this.handleSocketData(data);
-					};
-					reader.readAsText(event.data);
-				} else {
-					const data = JSON.parse(event.data);
-					this.handleSocketData(data);
-				}
-			}
-
-			this.socket.onclose = () => {
-				// attempt to reconnect
-				this.joinWebSocket();
-				console.log('WebSocket connection closed');
-			};
-
-			this.socket.onerror = (error) => {
-				console.error('WebSocket error:', error);
-			};
-
-			// experimental
-			// ideally we could just sync the workshopstore across all connected clients
-			// then updating the state would work for everyone.
-			// This works for updating the name - via this.workshopName = 'new name';
-			// but we get some infinite looping over the socket with generic subscriber.
-			// this.workshopStore.$subscribe((mutation, state) => {
-			// 	if (!this.isRemoteUpdate) {
-			// 		console.log('workshopStore changed:', mutation, state);
-			// 		this.updateWorkshop({
-			// 			data: state
-			// 		});
-			// 	}
-			// 	this.isRemoteUpdate = false; // Reset the flag after sending
-			// });
-		},
-		handleSocketData(packet) {
-			console.log('handleSocketData:', packet);
-			switch (packet.type) {
-				case 'clientList':
-					this.handleClientList(packet);
-					break;
-				case 'cursorUpdate':
-					this.handleUpdateCursor(packet);
-					break;
-				case 'facilitatorExploreProblemsStart':
-					this.workshopStore.exploreProblemsStart();
-					break;
-				case 'facilitatorExploreProblemsGo':
-					this.workshopStore.exploreProblemsGo();
-					break;
-				case 'facilitatorExploreProblemsPause':
-					this.workshopStore.exploreProblemsPause();
-					break;
-				case 'facilitatorExploreProblemsResume':
-					this.workshopStore.exploreProblemsResume();
-					break;
-				case 'data:workshop':
-					this.isRemoteUpdate = true;
-					this.workshopStore.$patch(packet.data.workshop);
-					break;
-				case 'client:updateState':
-					console.log('UPDATE STATE!', packet);
-					this.sharedStore.$patch(packet.data.state); // Apply received state
-					break;
-			}
-		},
 		facilitatorExploreProblemsStart() {
-			this.workshopStore.exploreProblemsStart(this.socket);
-		},
-		broadcast(type, data) {
-			console.log('broadcast:', type, data);
-			this.socket.send(JSON.stringify({
-				type: 'broadcastDataToClients',
-				data: {
-					type: type,
-					data: data
-				}
-			}));
+			this.workshopStore.exploreProblemsStart();
 		},
 		generateQRCode(url) {
-			const canvas = this.$refs.qrcodeCanvas;
-			QRCode.toCanvas(canvas, url, function (error) {
-				if (error) console.error(error);
-				console.log('QR code generated!');
+			nextTick(() => {
+				const canvas = this.$refs.qrcodeCanvas;
+				QRCode.toCanvas(canvas, url, function (error) {
+					if (error) console.error(error);
+					console.log('QR code generated!');
+				});
 			});
 		},
 		trackCursorMovement() {

@@ -65,7 +65,8 @@ export const useUserStore = defineStore('user', {
 				}
 				const json = await response.json();
 				if (json.status == 'success') {
-					Object.assign(this, json.data.user)
+					this.$patch(json.data.user)
+					// Object.assign(this, json.data.user)
 				}
 			} catch (error) {
 				console.error("Failed to fetch user:", error.message);
@@ -80,7 +81,8 @@ export const useUserStore = defineStore('user', {
 				});
 				if (!response.ok) throw new Error("Token refresh failed");
 				const data = await response.json();
-				this.accessToken = data.accessToken;
+				this.$patch({accessToken: data.accessToken})
+
 				return true; // Token refreshed successfully
 			} catch (error) {
 				console.error("Failed to refresh token:", error.message);
@@ -99,8 +101,10 @@ export const useUserStore = defineStore('user', {
 			});
 			const json = await response.json();
 			if (json.status == 'success') {
-				this.accessToken = json.data.accessToken;
-				Object.assign(this, json.data.user)
+				this.$patch((state) => {
+					state.accessToken = json.data.accessToken;
+					Object.assign(state, json.data.user)
+				})
 			}
 			return json;
 		},

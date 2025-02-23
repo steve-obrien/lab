@@ -1,41 +1,44 @@
 <template>
 	<div>
-		<h1>Test</h1>
+		<h2>Counter Demo</h2>
+		<p>Count: {{ counterStore.state.count }}</p>
+		<p v-if="counterStore.state.loading">Loading data...</p>
 
-		<pre>{{ alice }}</pre>
-		<pre>{{ bob }}</pre>
-		<pre>{{ foundUser }}</pre>
-		<pre>{{ allUsers }}</pre>
+		<button @click="counterStore.increment()">Increment</button>
+		<button @click="counterStore.decrement()">Decrement</button>
+		<button @click="counterStore.fetchCountFromAPI()">Fetch from API</button>
+
+		<button @click="counterStore.undo()">Undo</button>
+		<button @click="counterStore.redo()">Redo</button>
+
+		<hr />
+		<h3>Nested State Demo</h3>
+		<p>Name: {{ counterStore.state.profile.name }}</p>
+		<p>Level: {{ counterStore.state.profile.stats.level }}</p>
+		<p>EXP: {{ counterStore.state.profile.stats.exp }}</p>
+		<button @click="gainExperience(10)">Gain 10 EXP</button>
 	</div>
 </template>
 
 <script setup>
-import { User } from '@/stores/models/User'
-import { onMounted } from 'vue'
-// Create new users
-const alice = new User({ id: 1, name: 'Alice', age: 25 })
-const bob = new User({ id: 2, name: 'Bob', age: 17 })
+import { useCounterStore } from "@/stores/counterStore";
 
-// Find a user
-const foundUser = User.find(1)
-console.log(foundUser?.data.name) // "Alice"
+// Access the store (shared instance)
+const counterStore = useCounterStore();
 
-// Get all users
-const allUsers = User.all()
-console.log(allUsers.map(user => user.data.name)) // ["Alice", "Bob"]
-
-// Update a user
-alice.data.age = 26
-alice.save()
-
-// Delete a user
-bob.delete()
-
-onMounted(() => {
-	// Fetch users from an API and store them
-	window.alice = alice
-	window.bob = bob
-	window.foundUser = foundUser
-	window.allUsers = allUsers
-})
+// Demonstration: modify a nested property using an action
+function gainExperience(amount) {
+	counterStore.commit((state, payload) => {
+		return {
+			...state,
+			profile: {
+				...state.profile,
+				stats: {
+					...state.profile.stats,
+					exp: state.profile.stats.exp + payload,
+				},
+			},
+		};
+	}, amount);
+}
 </script>
