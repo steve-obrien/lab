@@ -2,6 +2,18 @@ import Record from '../db/Record.js';
 import vine from '@vinejs/vine'
 import { customAlphabet } from 'nanoid'
 
+// const type = {
+// 	attr: 'attr',
+// 	collection: 'collection',
+// 	model: 'model',
+// 	toDb: (value) => {
+// 		return value;
+// 	},
+// 	fromDb: (value) => {
+// 		return value;
+// 	}
+// }
+
 const json = (name) => {
 	return {
 		type: 'attr',

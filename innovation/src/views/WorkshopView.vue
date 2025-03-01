@@ -284,6 +284,10 @@ export default {
 		},
 	},
 	methods: {
+		addProblem() {
+			// need to implement this
+			this.workshopStore.addProblem('problem')
+		},
 		async setUpState() {
 
 			// get the workshop.

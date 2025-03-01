@@ -4,11 +4,25 @@ import Record from '../db/Record.js';
 
 const PEPPER = process.env.PEPPER_SECRET
 
+// $model = new ModelDefinition('workshop', {
+// 	id: new Field.Ulid(),
+// 	name: new Field.String({
+// 		validate: 'minLength:3'
+// 	}),
+// 	email: new Field.Email(),
+// 	password: new Field.Password({
+// 		validators: 'required|minLength:6|pawnd'
+// 	}),
+// 	created_at: new Field.Datetime(),
+// 	updated_at: new Field.Datetime(),
+// 	meta_data_json: new Field.Json({}),
+// })
+
 export default class User extends Record {
 	static table = 'users'
 
 	schema() {
-		return {
+		return  {
 			id : new Field.Ulid(),
 			name : new Field.String({
 				validate: 'minLength:3'
@@ -19,6 +33,7 @@ export default class User extends Record {
 			}),
 			created_at : new Field.Datetime(),
 			updated_at : new Field.Datetime(),
+			meta_data_json: new Field.Json({}),
 		}
 	}
 

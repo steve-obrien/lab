@@ -32,7 +32,7 @@ export default class User extends Record {
 			// 		return true;
 			// 	})
 			// ),
-		password: vine.string().minLength(6)
+		password: vine.string().minLength(6),
 	});
 
 	passwordValid(password) {
