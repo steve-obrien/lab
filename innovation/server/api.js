@@ -11,7 +11,12 @@ import authenticateToken from './middleware/auth.js';
 import { setupWebSocketServer } from './ws.js'; // Import the WebSocket setup function
 import Workshop from './models/Workshop.js';
 import { broadcastWorkshopUpdates } from './ws.js';
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 dotenv.config();
+
 
 // const app = express();
 // const server = http.createServer(app);
@@ -32,7 +37,7 @@ const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 export default function defineServerApi(app) {
 
 	app.use(cors({
-		origin: ["*","http://localhost:5173", "http://localhost:8181", "http://localhost:3000"], // Allow requests from your frontend
+		origin: ["*", "http://localhost:5173", "http://localhost:8181", "http://localhost:3000"], // Allow requests from your frontend
 		credentials: true, // Allow cookies to be sent and received
 		methods: ["GET", "POST", "PUT", "DELETE"], // Allow necessary methods
 		allowedHeaders: ["Content-Type", "Authorization"], // Allow these headers
@@ -56,12 +61,12 @@ export default function defineServerApi(app) {
 	app.post("/api/login", async (req, res) => {
 
 		const { email, password } = req.body;
-console.log(req.useragent , req.ip)
+		console.log(req.useragent, req.ip)
 		const deviceInfo = `${req.useragent.platform} - ${req.useragent.browser}`;  // Example: "Windows - Chrome"
 
 		if (!email) return res.status(400).json({ status: "fail", data: { email: 'Email is required' } });
 		if (!password) return res.status(400).json({ status: "fail", data: { password: 'Password is required' } });
-	
+
 		// log the user in
 		const user = await User.login(email, password);
 		// user not found - invalid credentials
@@ -86,9 +91,9 @@ console.log(req.useragent , req.ip)
 		// lets also return the user object
 		res.json({
 			status: "success",
-			data: { 
-				accessToken, 
-				user: user.toJSON() 
+			data: {
+				accessToken,
+				user: user.toJSON()
 			}
 		});
 	});
@@ -108,7 +113,7 @@ console.log(req.useragent , req.ip)
 			if (!saved) {
 				return res.status(400).json({ status: "fail", data: user.getErrorsByField() });
 			}
-			res.json({ status: "success", data: { user: user.toJSON() }});
+			res.json({ status: "success", data: { user: user.toJSON() } });
 		} catch (error) {
 			console.error(req.url, error, error.stack);
 			res.status(500).json({ status: "error", message: "Server error" });
@@ -141,18 +146,18 @@ console.log(req.useragent , req.ip)
 	app.get("/api/me", authenticateToken, async (req, res) => {
 		try {
 			const userId = req.user.id; // Extracted from the JWT token
-	
+
 			// get the user data and state information.
 			const user = await User.find(userId);
 
 			if (!user) {
 				return res.status(404).json({ status: "error", message: "User not found" });
 			}
-	
-			res.json({ status: "success", data: { user: user.toJSON() }});
+
+			res.json({ status: "success", data: { user: user.toJSON() } });
 		} catch (error) {
 			console.error(error);
-			res.status(500).json({ status: "error", message: "Server error"  });
+			res.status(500).json({ status: "error", message: "Server error" });
 		}
 	});
 
@@ -164,13 +169,13 @@ console.log(req.useragent , req.ip)
 			return res.status(400).json({ status: "fail", data: { facilitatorId: 'Facilitator ID is required' } });
 		}
 		console.log(req.body);
-		const workshop = new Workshop({created_by:facilitatorId, name:name});
+		const workshop = new Workshop({ created_by: facilitatorId, name: name });
 		const saved = await workshop.save();
 		if (!saved) {
 			return res.status(400).json({ status: "fail", data: workshop.getErrorsByField() });
 		} else {
 			const workshopData = workshop.toJSON();
-			res.json({ status: "success", data: { workshop: workshopData }});
+			res.json({ status: "success", data: { workshop: workshopData } });
 		}
 	});
 
@@ -180,7 +185,7 @@ console.log(req.useragent , req.ip)
 		if (!workshop) {
 			return res.status(404).json({ error: "Workshop not found" });
 		}
-		res.json({ status: "success", data: { workshop: workshop.toJSON() }});
+		res.json({ status: "success", data: { workshop: workshop.toJSON() } });
 	});
 
 	app.post("/api/workshops/:id", authenticateToken, async (req, res) => {
@@ -194,10 +199,41 @@ console.log(req.useragent , req.ip)
 		// broadcast the update to all clients
 		// broadcastDataToClients(workshop);
 		const workshopData = workshop.toJSON();
-		res.json({ status: "success", data: { workshop: workshopData }});
+		res.json({ status: "success", data: { workshop: workshopData } });
 		console.log('broadcasting workshop updates', workshopData);
 		broadcastWorkshopUpdates(workshop.id, workshopData);
 	});
+
+	app.get("/api/diagram", (req, res) => {
+		const expressRoutes = getExpressRoutes(app);
+		const websocketRoutes = [];
+		const diagramData = generateCytoscapeData(expressRoutes, websocketRoutes);
+		res.send({ diagram: diagramData });
+	});
+
+	app.get("/diagram", (req, res) => {
+		const __dirname = path.dirname(fileURLToPath(import.meta.url))
+		res.sendFile(path.join(__dirname, "diagram.html"));
+	});
+
+}
+
+
+
+function generateMermaidDiagram(expressRoutes, wsRoutes) {
+	let diagram = "graph TD;\n";
+
+	expressRoutes.forEach(({ path, methods, handler }) => {
+		methods.forEach((method) => {
+			diagram += `    ${method.toUpperCase()}_${path.replace(/\//g, "_")}("${method.toUpperCase()} ${path}") -->|Calls| dispatch;\n`;
+		});
+	});
+
+	wsRoutes.forEach(({ event, handler }) => {
+		diagram += `    WS_${event}("WS Event: ${event}") -->|Handles| ${handler};\n`;
+	});
+
+	return diagram;
 }
 
 // Setup WebSocket server
@@ -211,3 +247,37 @@ console.log(req.useragent , req.ip)
 // server.listen(port, () => {
 // 	console.log(`Server is running on http://localhost:${port}`);
 // });
+
+function getExpressRoutes(app) {
+	const routes = [];
+	app._router.stack.forEach((middleware) => {
+		if (middleware.route) {
+			const { path, methods } = middleware.route;
+			routes.push({
+				id: path, // Cytoscape requires "id" as a key
+				label: `${Object.keys(methods).join(", ").toUpperCase()} ${path}`,
+				category: "HTTP",
+				handler: middleware.handle.name || "anonymous",
+			});
+		}
+	});
+	return routes;
+}
+
+
+function generateCytoscapeData(expressRoutes, wsRoutes) {
+	const nodes = [{ data: { id: "API", label: "API Root" } }];
+	const edges = [];
+
+	expressRoutes.forEach((route) => {
+		nodes.push({ data: { id: route.id, label: route.label } });
+		edges.push({ data: { source: "API", target: route.id } });
+	});
+
+	wsRoutes.forEach((route) => {
+		nodes.push({ data: { id: route.id, label: route.label } });
+		edges.push({ data: { source: "API", target: route.id } });
+	});
+
+	return { nodes, edges };
+}
