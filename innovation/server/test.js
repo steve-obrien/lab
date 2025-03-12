@@ -1,5 +1,10 @@
 import User from './models/User.js';
 import Workshop from './models/Workshop.js';
+
+console.log(await User.findOrFail('vuts'));
+process.exit(0);
+
+
 const user = new User({
 	name: 'John Doe',
 	email: 'john.doeexample.com',

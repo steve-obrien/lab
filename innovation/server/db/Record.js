@@ -1,5 +1,7 @@
 import knex from './knex.js';
 import vine, { errors } from '@vinejs/vine';
+import { HttpError } from '../utils.js';
+
 /**
  * A simple base class for all database rows.
  */
@@ -174,6 +176,14 @@ export default class Record {
 		return row ? new this(row) : null;
 	}
 
+	static async findOrFail(id) {
+		const row = await this.find(id);
+		if (!row) {
+			throw new HttpError(404, `${this.name} not found`);
+		}
+		return row;
+	}
+
 	/**
 	 * Returns a query builder for the table
 	 * @returns {import('knex').QueryBuilder}
@@ -184,5 +194,9 @@ export default class Record {
 
 	static db(table) {
 		return knex(table);
+	}
+
+	static getName() {
+		return this.name;
 	}
 }

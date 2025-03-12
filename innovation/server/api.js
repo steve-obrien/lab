@@ -1,19 +1,16 @@
 import express from 'express'
-import http from 'http';
 import cors from 'cors'; // Import the cors package
 import dotenv from 'dotenv';
 import User from './models/User.js';
 import jwt from "jsonwebtoken"
 import cookieParser from 'cookie-parser'
-import knex from './db/knex.js';
 import useragent from "express-useragent";
 import authenticateToken from './middleware/auth.js';
-import { setupWebSocketServer } from './ws.js'; // Import the WebSocket setup function
 import Workshop from './models/Workshop.js';
 import { broadcastWorkshopUpdates } from './ws.js';
-import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { HttpError } from './utils.js';
 
 dotenv.config();
 
@@ -36,20 +33,37 @@ const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 
 export default function defineServerApi(app) {
 
+	// Handle cors
 	app.use(cors({
 		origin: ["*", "http://localhost:5173", "http://localhost:8181", "http://localhost:3000"], // Allow requests from your frontend
 		credentials: true, // Allow cookies to be sent and received
 		methods: ["GET", "POST", "PUT", "DELETE"], // Allow necessary methods
 		allowedHeaders: ["Content-Type", "Authorization"], // Allow these headers
 	}));
+	// Parse json
 	app.use(express.json());
+	// Parse cookies
 	app.use(cookieParser());
+	// Parse useragent
 	app.use(useragent.express());
+	// Global Error Handler
 
+	app.get('/api/hello/:id', async (req, res, next) => {
+		try {
+			const { id } = req.params;
+			const user = await User.findOrFail(id)
+			res.json(user.toJSON());
+		} catch (error) {
+			next(error);
+		}
+	});
 
-
-	app.get('/api/hello', (req, res) => {
-		res.send('Hello World');
+	app.use((err, req, res, next) => {
+		if (err instanceof HttpError) {
+			return res.status(err.status).json({ error: err.message });
+		}
+		console.error(`[${new Date().toISOString()}] Unhandled Error:`, err);
+		res.status(500).json({ error: 'Internal Server Error' });
 	});
 
 	/**
@@ -98,6 +112,23 @@ export default function defineServerApi(app) {
 		});
 	});
 
+	app.post("/api/refresh", (req, res) => {
+		const refreshToken = req.cookies.refreshToken;
+		if (!refreshToken) return res.status(401).json({ error: "Not authenticated" });
+
+		jwt.verify(refreshToken, JWT_REFRESH_SECRET, async (err, user) => {
+			if (err) return res.status(403).json({ error: "Invalid refresh token" });
+
+			// find user by id
+			const userRecord = await User.findBy('id', user.id)
+			if (!userRecord) return res.status(401).json({ error: "User not found" });
+			// We could double check data on the user record here.
+
+			const newAccessToken = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "15m" });
+			res.json({ accessToken: newAccessToken });
+		});
+	});
+
 
 	app.post("/api/register", async (req, res) => {
 		const { name, email, password } = req.body;
@@ -120,22 +151,6 @@ export default function defineServerApi(app) {
 		}
 	});
 
-	app.post("/api/refresh", (req, res) => {
-		const refreshToken = req.cookies.refreshToken;
-		if (!refreshToken) return res.status(401).json({ error: "Not authenticated" });
-
-		jwt.verify(refreshToken, JWT_REFRESH_SECRET, async (err, user) => {
-			if (err) return res.status(403).json({ error: "Invalid refresh token" });
-
-			// find user by id
-			// const user = await User.findBy('id', user.id)
-			// if (!user) return res.status(401).json({ error: "User not found" });
-
-			const newAccessToken = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "15m" });
-			res.json({ accessToken: newAccessToken });
-		});
-	});
-
 	app.post("/api/logout", (req, res) => {
 		res.clearCookie("refreshToken");
 		res.sendStatus(204);
@@ -148,6 +163,7 @@ export default function defineServerApi(app) {
 			const userId = req.user.id; // Extracted from the JWT token
 
 			// get the user data and state information.
+			await User.findOrFail(userId)
 			const user = await User.find(userId);
 
 			if (!user) {
@@ -215,6 +231,7 @@ export default function defineServerApi(app) {
 		const __dirname = path.dirname(fileURLToPath(import.meta.url))
 		res.sendFile(path.join(__dirname, "diagram.html"));
 	});
+
 
 }
 
