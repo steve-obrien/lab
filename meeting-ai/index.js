@@ -55,7 +55,6 @@ app.post('/inbound', async (req, res) => {
 	// If it does not include a user then send to the signup AI.
 
 	const ai = new OpenAI({ apiKey: config.openaiApiKey });
-// ai.assistants.chat()
 	const aiRunner = ai.beta.chat.completions.runTools({
 		model: 'gpt-4o',
 		messages: [
